@@ -8,6 +8,29 @@ export function isPresidium(actor: SessionUser): boolean {
   return actor.role === 'SECRETARY' || actor.role === 'SBG_LEADER';
 }
 
+// Member data management (edit any member's profile) is Presidium-as-usual,
+// plus a deliberate carve-out: HR & Admin's Manager/Associate own onboarding
+// and member records for the whole org, not just their own subdomain.
+export function canEditMembers(actor: SessionUser): boolean {
+  if (isPresidium(actor)) return true;
+  return actor.subdomain === 'HR & Admin' && (actor.role === 'MANAGER' || actor.role === 'ASSOCIATE');
+}
+
+// Presidium has no domain affiliation at all; a DIRECTOR oversees a whole
+// domain, never a single subdomain within it. Centralized here so both the
+// create and update member routes reject the same bad combinations instead
+// of drifting — this is what stops stale subdomain values (e.g. carried over
+// from a registration form, before someone got promoted) from sticking.
+export function validateRoleScope(role: string, domain?: string | null, subdomain?: string | null): string | null {
+  if ((role === 'SBG_LEADER' || role === 'SECRETARY') && (domain || subdomain)) {
+    return 'Presidium (SBG Leader/Secretary) cannot have a domain or subdomain';
+  }
+  if (role === 'DIRECTOR' && subdomain) {
+    return 'A Director oversees a whole domain and cannot have a subdomain';
+  }
+  return null;
+}
+
 export function canReviewSubmission(actor: SessionUser, submission: { memberId: string; domain?: Domain | null; subdomain?: Subdomain | null }): boolean {
   if (isPresidium(actor)) return true;
   if (actor.memberId === submission.memberId) return false; // Can't review own

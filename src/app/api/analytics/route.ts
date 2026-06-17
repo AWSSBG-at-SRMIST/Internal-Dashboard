@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
       pending: submissions.filter((s: any) => s.reviewStatus === 'PENDING').length,
     };
 
-    // Role distribution
-    const roleStats = ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE', 'BUILDER'].map(role => ({
+    // Role distribution — Presidium excluded, same as the leaderboard
+    const roleStats = ['DIRECTOR', 'MANAGER', 'ASSOCIATE', 'BUILDER'].map(role => ({
       role,
       count: members.filter((m: any) => m.role === role && m.isActive).length,
     }));

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, ScanCommand, PutCommand, QueryCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium } from '@/lib/permissions';
+import { isPresidium, validateRoleScope } from '@/lib/permissions';
 import { randomUUID } from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
     if (emailCheck.Items && emailCheck.Items.length > 0) {
       return NextResponse.json({ error: 'A member with that email already exists' }, { status: 409 });
     }
+
+    const scopeError = validateRoleScope(body.role || 'BUILDER', body.domain, body.subdomain);
+    if (scopeError) return NextResponse.json({ error: scopeError }, { status: 400 });
 
     const memberId = randomUUID();
     const member = {

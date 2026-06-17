@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium } from '@/lib/permissions';
+import { isPresidium, canEditMembers, validateRoleScope } from '@/lib/permissions';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const user = await getCurrentUser();
@@ -29,21 +29,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
 
   const { memberId } = await params;
 
-  // Only super admins can edit others; members can edit their own non-sensitive fields
-  if (!isPresidium(user) && user.memberId !== memberId) {
+  // Presidium and HR & Admin's Manager/Associate can edit anyone; everyone
+  // else can only edit their own non-sensitive fields.
+  if (!canEditMembers(user) && user.memberId !== memberId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
     const body = await req.json();
-    const allowedFields = isPresidium(user)
-      ? ['name', 'role', 'domain', 'subdomain', 'department', 'phone', 'github', 'linkedin', 'meetup', 'builderId', 'personalEmail', 'isActive', 'clubId', 'regNo']
+    const allowedFields = canEditMembers(user)
+      ? ['name', 'role', 'domain', 'subdomain', 'department', 'section', 'phone', 'whatsapp', 'github', 'linkedin', 'instagram', 'meetup', 'builderId', 'personalEmail', 'faName', 'faEmail', 'faPhone', 'isActive', 'clubId', 'regNo']
       : ['phone', 'github', 'linkedin', 'meetup', 'personalEmail'];
 
     // URL fields are rendered back as <a href> client-side, so a non-http(s)
     // scheme (e.g. javascript:) would execute in the viewer's session — reject
     // anything that doesn't parse as a plain http/https URL before it's stored.
-    const urlFields = ['github', 'linkedin', 'meetup', 'builderId'];
+    const urlFields = ['github', 'linkedin', 'instagram', 'meetup', 'builderId'];
     for (const field of urlFields) {
       if (body[field] === undefined || body[field] === '') continue;
       try {
@@ -58,6 +59,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
     }
     if (body.phone && !/^[+\d][\d\s-]{6,19}$/.test(body.phone)) {
       return NextResponse.json({ error: 'phone must be a valid phone number' }, { status: 400 });
+    }
+
+    // Validate the role/domain/subdomain combination against what it'll
+    // actually be after this update — not just what's in the request body,
+    // since a partial update (e.g. only changing role) must be checked
+    // against the fields it's leaving untouched.
+    if (allowedFields.includes('role') || allowedFields.includes('domain') || allowedFields.includes('subdomain')) {
+      const current = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
+      if (!current.Item) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+      const effectiveRole = body.role !== undefined ? body.role : current.Item.role;
+      const effectiveDomain = body.domain !== undefined ? body.domain : current.Item.domain;
+      const effectiveSubdomain = body.subdomain !== undefined ? body.subdomain : current.Item.subdomain;
+      const scopeError = validateRoleScope(effectiveRole, effectiveDomain, effectiveSubdomain);
+      if (scopeError) return NextResponse.json({ error: scopeError }, { status: 400 });
     }
 
     // domain/subdomain sit on sbg-members' DomainIndex GSI, which throws a

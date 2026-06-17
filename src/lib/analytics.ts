@@ -53,7 +53,9 @@ export async function getAnalyticsData(): Promise<AnalyticsResponse> {
     pending: submissions.filter((s: any) => s.reviewStatus === 'PENDING').length,
   };
 
-  const roleStats = ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE', 'BUILDER'].map(role => ({
+  // Presidium (SBG_LEADER/SECRETARY) doesn't belong to the regular org
+  // hierarchy — excluded here the same way it's excluded from the leaderboard.
+  const roleStats = ['DIRECTOR', 'MANAGER', 'ASSOCIATE', 'BUILDER'].map(role => ({
     role,
     count: members.filter((m: any) => m.role === role && m.isActive).length,
   }));
