@@ -36,7 +36,7 @@ function MemberMobileCard({ member, hideDomain, hideStars, hideSubdomain, delay 
         )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5 mt-3">
-        <Badge className={getRoleColor(member.role)} variant="secondary">{formatRole(member.role, member.domain)}</Badge>
+        <Badge className={getRoleColor(member.role, member.domain)} variant="secondary">{formatRole(member.role, member.domain)}</Badge>
         {!hideDomain && member.domain && <Badge className={getDomainColor(member.domain)} variant="secondary">{member.domain}</Badge>}
         {!hideSubdomain && member.subdomain && <Badge className={getSubdomainColor(member.subdomain)}>{member.subdomain}</Badge>}
       </div>
@@ -90,7 +90,7 @@ function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { member
                 </div>
               </td>
               <td className="px-4 py-3 hidden md:table-cell">
-                <Badge className={getRoleColor(member.role)} variant="secondary">{formatRole(member.role, member.domain)}</Badge>
+                <Badge className={getRoleColor(member.role, member.domain)} variant="secondary">{formatRole(member.role, member.domain)}</Badge>
               </td>
               {!hideDomain && (
                 <td className="px-4 py-3 hidden lg:table-cell">

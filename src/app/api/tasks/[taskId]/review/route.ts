@@ -4,7 +4,7 @@ import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { calculateRating, applyRating } from '@/lib/ratings';
 import { canReviewSubmission } from '@/lib/permissions';
-import type { Domain, Subdomain } from '@/types';
+import type { Domain, Subdomain, TaskPriority } from '@/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   const user = await getCurrentUser();
@@ -13,8 +13,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
   const { taskId } = await params;
 
   try {
-    const { submissionId, action, feedback } = await req.json(); // action: 'APPROVE' | 'REJECT'
-    if (!submissionId || !['APPROVE', 'REJECT'].includes(action)) {
+    const { submissionId, action, feedback } = await req.json(); // action: 'APPROVE' | 'REJECT' | 'REVISE'
+    if (!submissionId || !['APPROVE', 'REJECT', 'REVISE'].includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
     if (feedback !== undefined && typeof feedback !== 'string') {
@@ -43,11 +43,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
       return NextResponse.json({ error: 'Not authorized to review this submission' }, { status: 403 });
     }
 
-    const ratingDelta = action === 'APPROVE'
-      ? calculateRating(submission.submittedAt, submission.deadline)
-      : 0;
+    let ratingDelta = 0;
+    let late = false;
+    if (action === 'APPROVE') {
+      const result = calculateRating(submission.submittedAt, submission.deadline, (task.priority as TaskPriority) || 'MEDIUM');
+      ratingDelta = result.delta;
+      late = result.late;
+    }
 
-    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'REVISION_REQUESTED';
+
+    // COLLECTIVE task: approving the first submission closes the task for everyone.
+    if (action === 'APPROVE' && task.submissionMode === 'COLLECTIVE') {
+      await db.send(new UpdateCommand({
+        TableName: TABLE.TASKS,
+        Key: { taskId },
+        UpdateExpression: 'SET #s = :closed',
+        ConditionExpression: '#s = :open',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':closed': 'CLOSED', ':open': 'OPEN' },
+      })).catch((err: any) => {
+        if (err.name !== 'ConditionalCheckFailedException') throw err;
+      });
+    }
 
     await db.send(new UpdateCommand({
       TableName: TABLE.SUBMISSIONS,
@@ -63,19 +81,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
       },
     }));
 
-    // Always call applyRating on review so pendingCount and review counters stay
-    // accurate for both approved and rejected submissions.
-    await applyRating(submission.memberId, ratingDelta, action);
+    // REVISE: decrement pendingCount only (no star change, no approval/rejection counter).
+    // APPROVE/REJECT: full rating application.
+    await applyRating(submission.memberId, ratingDelta, action === 'REVISE' ? 'REVISE' : action, late);
 
     await logAction(
       user,
       `${action}_SUBMISSION`,
       'SUBMISSION',
       submissionId,
-      `${action} submission by ${submission.memberName} for task: ${task.title}. Rating: ${ratingDelta > 0 ? '+' : ''}${ratingDelta}`,
+      action === 'REVISE'
+        ? `Requested revision from ${submission.memberName} for task: ${task.title}`
+        : `${action} submission by ${submission.memberName} for task: ${task.title}. Rating: ${ratingDelta > 0 ? '+' : ''}${ratingDelta}`,
     );
 
-    return NextResponse.json({ success: true, ratingAwarded: ratingDelta });
+    return NextResponse.json({ success: true, ratingAwarded: action === 'APPROVE' ? ratingDelta : null });
   } catch (error) {
     console.error('Review error:', error);
     return NextResponse.json({ error: 'Failed to review submission' }, { status: 500 });

@@ -164,7 +164,7 @@ export default function MemberProfilePage({ params }: { params: Promise<{ member
                 {!member.isActive && <Badge variant="destructive">Inactive</Badge>}
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
-                <Badge className={getRoleColor(member.role)}>{formatRole(member.role, member.domain)}</Badge>
+                <Badge className={getRoleColor(member.role, member.domain)}>{formatRole(member.role, member.domain)}</Badge>
                 {member.domain && member.role !== 'DIRECTOR' && <Badge className={getDomainColor(member.domain)}>{member.domain}</Badge>}
                 {member.subdomain && <Badge className={getSubdomainColor(member.subdomain)}>{member.subdomain}</Badge>}
               </div>

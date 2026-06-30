@@ -61,56 +61,101 @@ export function formatRole(role: string, domain?: string | null): string {
   return labels[role] || role.replace('_', ' ');
 }
 
-// Role, Domain, and Subdomain badges are often shown side by side on the same
-// member, so each function below draws from its own disjoint hue set —
-// no role color ever equals a domain color or a subdomain color.
-export function getRoleColor(role: string): string {
+// Solid pill style for every tag, built from exact hex values chosen by the
+// user — do not change the hex values, only edit the `dark` flag if a tag's
+// text contrast ever needs flipping.
+// Text color is picked per-hex for contrast (bright hues like yellow/lime/
+// sky/cyan get dark text, deep hues get white) — flat white-on-everything
+// made the lighter tags unreadable/washed out. A subtle inset ring + shadow
+// gives the pill some depth instead of a flat color block.
+function solidBadge(hex: string, dark: boolean): string {
+  const text = dark ? 'text-slate-900' : 'text-white';
+  const ring = dark ? 'ring-black/10' : 'ring-white/15';
+  return `bg-[${hex}] ${text} font-semibold shadow-sm ring-1 ring-inset ${ring}`;
+}
+
+export function getRoleColor(role: string, domain?: string | null): string {
+  if (role === 'DIRECTOR') {
+    const directorColors: Record<string, string> = {
+      Technical: solidBadge('#14B8A6', true),
+      Corporate: solidBadge('#EC4899', true),
+      Creatives: solidBadge('#F97316', true),
+    };
+    return (domain && directorColors[domain]) || solidBadge('#14B8A6', true);
+  }
   const colors: Record<string, string> = {
-    SBG_LEADER: 'bg-red-500/20 text-red-300',
-    SECRETARY: 'bg-purple-500/20 text-purple-300',
-    DIRECTOR: 'bg-indigo-500/20 text-indigo-300',
-    MANAGER: 'bg-teal-500/20 text-teal-300',
-    ASSOCIATE: 'bg-yellow-500/20 text-yellow-300',
-    BUILDER: 'bg-slate-700 text-slate-300',
+    SBG_LEADER: solidBadge('#D7263D', false),
+    SECRETARY: solidBadge('#64748B', false),
+    MANAGER: solidBadge('#EAB308', true),
+    ASSOCIATE: solidBadge('#9333EA', false),
+    BUILDER: solidBadge('#22C55E', true),
   };
   return colors[role] || 'bg-slate-700 text-slate-300';
 }
 
 export function getDomainColor(domain: string | null): string {
   const colors: Record<string, string> = {
-    Technical: 'bg-blue-500/20 text-blue-300',
-    Corporate: 'bg-green-500/20 text-green-300',
-    Creatives: 'bg-pink-500/20 text-pink-300',
-    General: 'bg-orange-500/20 text-orange-300',
+    Technical: solidBadge('#2563EB', false),
+    Corporate: solidBadge('#059669', false),
+    Creatives: solidBadge('#C026D3', false),
+    General: solidBadge('#78716C', false),
   };
   return domain ? (colors[domain] || 'bg-slate-700 text-slate-300') : 'bg-slate-700 text-slate-300';
 }
 
 export function getSubdomainColor(subdomain: string | null): string {
   const colors: Record<string, string> = {
-    'Software Development': 'bg-cyan-500/20 text-cyan-300',
-    'AI & Machine Learning': 'bg-violet-500/20 text-violet-300',
-    'Cloud & DevOps': 'bg-sky-500/20 text-sky-300',
-    'Events & Operations': 'bg-amber-500/20 text-amber-300',
-    'Sponsorship & Finance': 'bg-emerald-500/20 text-emerald-300',
-    'HR & Admin': 'bg-fuchsia-500/20 text-fuchsia-300',
-    'PR & Marketing': 'bg-lime-500/20 text-lime-300',
-    'Digital Design': 'bg-rose-500/20 text-rose-300',
-    'Media Production': 'bg-stone-500/20 text-stone-300',
+    'Software Development': solidBadge('#8B5E3C', false),
+    'AI & Machine Learning': solidBadge('#7C3AED', false),
+    'Cloud & DevOps': solidBadge('#38BDF8', true),
+    'Events & Operations': solidBadge('#84CC16', true),
+    'Sponsorship & Finance': solidBadge('#0F766E', false),
+    'HR & Admin': solidBadge('#F59E0B', true),
+    'PR & Marketing': solidBadge('#EF4444', false),
+    'Digital Design': solidBadge('#06B6D4', true),
+    'Media Production': solidBadge('#5B214A', false),
   };
   return subdomain ? (colors[subdomain] || 'bg-slate-700 text-slate-300') : 'bg-slate-700 text-slate-300';
 }
 
-// Reuses hues from getRoleColor's palette — assignment type badges only ever
-// appear on task pages, which never render a Role badge, so there's no clash.
 export function getAssignmentTypeColor(type: string): string {
   const colors: Record<string, string> = {
-    INDIVIDUAL: 'bg-indigo-500/20 text-indigo-300',
-    DOMAIN: 'bg-purple-500/20 text-purple-300',
-    SUBDOMAIN: 'bg-teal-500/20 text-teal-300',
-    GENERAL: 'bg-slate-700 text-slate-300',
+    ORG_WIDE:             'bg-slate-600/40 text-slate-300',
+    ALL_DIRECTORS:        'bg-indigo-500/20 text-indigo-300',
+    SINGLE_DIRECTOR:      'bg-indigo-500/20 text-indigo-300',
+    DOMAIN_WIDE:          'bg-purple-500/20 text-purple-300',
+    SUBDOMAIN_LEADERSHIP: 'bg-teal-500/20 text-teal-300',
+    SUBDOMAIN_WIDE:       'bg-blue-500/20 text-blue-300',
+    INDIVIDUAL:           'bg-yellow-500/20 text-yellow-300',
+    BUILDERS_ONLY:        'bg-orange-500/20 text-orange-300',
+    // Legacy values
+    PERSONAL:  'bg-yellow-500/20 text-yellow-300',
+    BROADCAST: 'bg-purple-500/20 text-purple-300',
+    DOMAIN:    'bg-purple-500/20 text-purple-300',
+    SUBDOMAIN: 'bg-blue-500/20 text-blue-300',
+    GENERAL:   'bg-slate-600/40 text-slate-300',
   };
   return colors[type] || 'bg-slate-700 text-slate-300';
+}
+
+export function getAssignmentScopeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    ORG_WIDE:             'Org-wide',
+    ALL_DIRECTORS:        'All Directors',
+    SINGLE_DIRECTOR:      'Director',
+    DOMAIN_WIDE:          'Domain-wide',
+    SUBDOMAIN_LEADERSHIP: 'Subdomain Leadership',
+    SUBDOMAIN_WIDE:       'Subdomain-wide',
+    INDIVIDUAL:           'Individual',
+    BUILDERS_ONLY:        'Builders Only',
+    // Legacy
+    PERSONAL:  'Personal',
+    BROADCAST: 'Broadcast',
+    DOMAIN:    'Domain-wide',
+    SUBDOMAIN: 'Subdomain-wide',
+    GENERAL:   'Org-wide',
+  };
+  return labels[type] || type;
 }
 
 export function getPriorityColor(priority: string): string {

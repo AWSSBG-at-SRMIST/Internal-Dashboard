@@ -3,18 +3,39 @@ import { db, TABLE, ScanCommand, QueryCommand } from '@/lib/dynamodb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckSquare, Users, Link2, TrendingUp, Clock, Star } from 'lucide-react';
-import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getGreeting, timeAgo, formatRole } from '@/lib/utils';
+import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getAssignmentScopeLabel, getGreeting, timeAgo, formatRole } from '@/lib/utils';
 import { isTaskVisible } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 import Link from 'next/link';
 
-// Builders are the bottom of the hierarchy, so their dashboard only shows
-// their own work. Everyone above them additionally oversees subordinates, so
-// their dashboard splits visible tasks into "mine" vs "my team's".
-function isMyTask(user: SessionUser, task: { assignmentType: string; assignedToId?: string | null; createdBy: string }) {
-  return (task.assignmentType === 'INDIVIDUAL' && task.assignedToId === user.memberId) ||
-    task.assignmentType === 'GENERAL' ||
-    task.createdBy === user.memberId;
+// A task is "mine" if it's addressed to me or a group I personally belong to
+// (i.e., I should submit for it). Team tasks are ones I oversee but don't submit.
+function isMyTask(
+  user: SessionUser,
+  task: { assignmentType: string; assignedToId?: string | null; domain?: string | null; subdomain?: string | null; createdBy: string },
+): boolean {
+  const s = task.assignmentType;
+  // Org-wide / everyone scopes
+  if (s === 'ORG_WIDE' || s === 'GENERAL') return true;
+  // All Directors → only for Directors
+  if (s === 'ALL_DIRECTORS') return user.role === 'DIRECTOR';
+  // Targeted at one specific person
+  if (s === 'SINGLE_DIRECTOR' || s === 'INDIVIDUAL') return task.assignedToId === user.memberId;
+  // Domain-wide: for anyone in that domain
+  if (s === 'DOMAIN_WIDE') return user.domain === task.domain;
+  // Subdomain-wide: anyone in subdomain
+  if (s === 'SUBDOMAIN_WIDE') return user.domain === task.domain && user.subdomain === task.subdomain;
+  // Subdomain leadership: Manager + Associates
+  if (s === 'SUBDOMAIN_LEADERSHIP') {
+    return user.domain === task.domain && user.subdomain === task.subdomain
+      && (user.role === 'MANAGER' || user.role === 'ASSOCIATE');
+  }
+  // Builders only
+  if (s === 'BUILDERS_ONLY') return user.domain === task.domain && user.subdomain === task.subdomain && user.role === 'BUILDER';
+  // Legacy scopes
+  if (s === 'PERSONAL') return task.assignedToId === user.memberId;
+  if (s === 'BROADCAST') return !task.domain; // org-wide broadcast
+  return false;
 }
 
 async function getDashboardStats(user: SessionUser) {
@@ -136,7 +157,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <Badge className={`${getAssignmentTypeColor(task.assignmentType)} text-xs flex-shrink-0`}>
-                        {task.assignmentType}
+                        {getAssignmentScopeLabel(task.assignmentType)}
                       </Badge>
                     </div>
                   </Link>
@@ -177,7 +198,7 @@ export default async function DashboardPage() {
                           </div>
                         </div>
                         <Badge variant="secondary" className="text-xs flex-shrink-0">
-                          {task.assignmentType}
+                          {getAssignmentScopeLabel(task.assignmentType)}
                         </Badge>
                       </div>
                     </Link>
@@ -245,7 +266,7 @@ export default async function DashboardPage() {
           <div className="flex flex-wrap gap-6">
             <div>
               <p className="text-xs text-slate-500 mb-1">Role</p>
-              <Badge className={getRoleColor(user.role)}>{formatRole(user.role, user.domain)}</Badge>
+              <Badge className={getRoleColor(user.role, user.domain)}>{formatRole(user.role, user.domain)}</Badge>
             </div>
             {user.domain && user.role !== 'DIRECTOR' && (
               <div>

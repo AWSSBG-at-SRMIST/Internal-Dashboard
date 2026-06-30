@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Clock, Link2, Plus, X, Loader2,
-  Check, XCircle, Star, ExternalLink, Calendar, User, Trash2
+  Check, XCircle, Star, ExternalLink, Calendar, User, Trash2, Lock, Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDateTime, timeAgo, isDeadlinePassed, getAssignmentTypeColor, getDomainColor, getSubdomainColor, getPriorityColor } from '@/lib/utils';
+import { formatDateTime, timeAgo, isDeadlinePassed, getAssignmentTypeColor, getAssignmentScopeLabel, getDomainColor, getSubdomainColor, getPriorityColor } from '@/lib/utils';
 import { getSubmissionTimingLabel } from '@/lib/ratings';
 import Link from 'next/link';
 import type { Task, Submission } from '@/types';
@@ -26,6 +26,7 @@ interface TaskDetailData {
   canSubmit: boolean;
   canDelete: boolean;
   canClose: boolean;
+  collectiveLockedBy: { memberId: string; memberName: string } | null;
 }
 
 export default function TaskDetailPage({ params }: { params: Promise<{ taskId: string }> }) {
@@ -78,10 +79,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
     finally { setSubmitting(false); }
   }
 
-  async function handleReview(submissionId: string, action: 'APPROVE' | 'REJECT') {
+  async function handleReview(submissionId: string, action: 'APPROVE' | 'REJECT' | 'REVISE') {
     if (!data) return;
     const prevData = data;
-    const optimisticStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const optimisticStatus = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'REVISION_REQUESTED';
     setReviewing(submissionId + action);
     // Optimistic: flip the submission's status immediately; reconciled with
     // authoritative data (ratingAwarded, reviewedByName) once the request settles.
@@ -97,7 +98,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       });
       const d = await res.json();
       if (!res.ok) { toast.error(d.error || 'Failed to review'); setData(prevData); return; }
-      toast.success(`Submission ${action.toLowerCase()}d! ${d.ratingAwarded ? `Rating: ${d.ratingAwarded > 0 ? '+' : ''}${d.ratingAwarded}⭐` : ''}`);
+      const msg = action === 'REVISE'
+        ? 'Revision requested'
+        : `Submission ${action.toLowerCase()}d!${d.ratingAwarded != null ? ` Rating: ${d.ratingAwarded > 0 ? '+' : ''}${d.ratingAwarded}⭐` : ''}`;
+      toast.success(msg);
       setFeedbackDrafts(f => { const next = { ...f }; delete next[submissionId]; return next; });
       fetchTask();
     } catch { toast.error('Failed to review submission'); setData(prevData); }
@@ -144,7 +148,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   );
   if (!data) return null;
 
-  const { task, submissions, mySubmission, canReview, canSubmit, canDelete, canClose } = data;
+  const { task, submissions, mySubmission, canReview, canSubmit, canDelete, canClose, collectiveLockedBy } = data;
   const overdue = isDeadlinePassed(task.deadline);
 
   return (
@@ -161,7 +165,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                 <Badge variant={task.status === 'OPEN' ? (overdue ? 'destructive' : 'default') : 'secondary'}>
                   {task.status === 'OPEN' ? (overdue ? 'Overdue' : 'Open') : 'Closed'}
                 </Badge>
-                <Badge className={getAssignmentTypeColor(task.assignmentType)}>{task.assignmentType}</Badge>
+                <Badge className={getAssignmentTypeColor(task.assignmentType)}>{getAssignmentScopeLabel(task.assignmentType)}</Badge>
+                {task.submissionMode === 'COLLECTIVE' && (
+                  <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 flex items-center gap-1">
+                    <Users size={11} /> Collective
+                  </Badge>
+                )}
                 {task.domain && <Badge className={getDomainColor(task.domain)}>{task.domain}</Badge>}
                 {task.subdomain && <Badge className={getSubdomainColor(task.subdomain)}>{task.subdomain}</Badge>}
                 {task.priority && <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>}
@@ -212,19 +221,21 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
         <CardContent className="p-4">
           <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2"><Star size={14} /> Rating Guide</h3>
           <div className="grid grid-cols-2 gap-1.5 text-xs text-blue-400">
-            <div>+3⭐ &gt;24h before deadline</div>
-            <div>+2⭐ Last 24h before deadline</div>
-            <div>+1⭐ Within 24h after deadline</div>
-            <div>-1⭐ More than 24h after deadline</div>
+            <div><span className="font-bold text-green-400">+2⭐</span> &gt;24h before deadline</div>
+            <div><span className="font-bold text-blue-400">+1⭐</span> Last 24h before deadline</div>
+            <div><span className="font-bold text-slate-400">+0⭐</span> Within 24h after deadline</div>
+            <div><span className="font-bold text-red-400">-1⭐</span> More than 24h after deadline</div>
           </div>
+          <p className="text-xs text-blue-500 mt-2">Priority multiplier: LOW×1 · MEDIUM×1.5 · HIGH×2</p>
         </CardContent>
       </Card>
 
       {/* My Submission Status */}
       {mySubmission && (
         <Card className={`border-2 ${
-          mySubmission.reviewStatus === 'APPROVED' ? 'border-green-500/40 bg-green-500/5' :
-          mySubmission.reviewStatus === 'REJECTED' ? 'border-red-500/40 bg-red-500/5' :
+          mySubmission.reviewStatus === 'APPROVED'           ? 'border-green-500/40 bg-green-500/5' :
+          mySubmission.reviewStatus === 'REJECTED'           ? 'border-red-500/40 bg-red-500/5' :
+          mySubmission.reviewStatus === 'REVISION_REQUESTED' ? 'border-orange-500/40 bg-orange-500/5' :
           'border-yellow-500/40 bg-yellow-500/5'
         }`}>
           <CardHeader className="pb-3">
@@ -236,8 +247,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                     {mySubmission.ratingAwarded > 0 ? '+' : ''}{mySubmission.ratingAwarded}⭐
                   </span>
                 )}
-                <Badge variant={mySubmission.reviewStatus === 'APPROVED' ? 'success' : mySubmission.reviewStatus === 'REJECTED' ? 'destructive' : 'warning'}>
-                  {mySubmission.reviewStatus}
+                <Badge variant={
+                  mySubmission.reviewStatus === 'APPROVED'           ? 'success' :
+                  mySubmission.reviewStatus === 'REJECTED'           ? 'destructive' :
+                  mySubmission.reviewStatus === 'REVISION_REQUESTED' ? 'warning' : 'warning'
+                }>
+                  {mySubmission.reviewStatus === 'REVISION_REQUESTED' ? 'Revision Requested' : mySubmission.reviewStatus}
                 </Badge>
               </div>
             </CardTitle>
@@ -328,6 +343,22 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
         </Card>
       )}
 
+      {/* COLLECTIVE locked — someone has submitted, waiting for review */}
+      {collectiveLockedBy && task.status === 'OPEN' && !mySubmission && (
+        <Card className="bg-purple-500/10 border-purple-500/40">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Lock size={18} className="text-purple-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-purple-300">Submission locked</p>
+              <p className="text-sm text-purple-400 mt-0.5">
+                <span className="font-medium text-purple-200">{collectiveLockedBy.memberName}</span> has already submitted for this task.
+                Once reviewed, the task will either close (approved) or reopen for others (rejected).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {task.status === 'CLOSED' && !mySubmission && (
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="p-4 text-center text-slate-400 text-sm">
@@ -354,8 +385,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
               <p className="text-center text-slate-500 py-8 text-sm">No submissions yet</p>
             ) : submissions.map(sub => (
               <div key={sub.submissionId} className={`border rounded-xl p-4 space-y-3 ${
-                sub.reviewStatus === 'APPROVED' ? 'border-green-500/30 bg-green-500/5' :
-                sub.reviewStatus === 'REJECTED' ? 'border-red-500/30 bg-red-500/5' : 'border-slate-700'
+                sub.reviewStatus === 'APPROVED'           ? 'border-green-500/30 bg-green-500/5' :
+                sub.reviewStatus === 'REJECTED'           ? 'border-red-500/30 bg-red-500/5' :
+                sub.reviewStatus === 'REVISION_REQUESTED' ? 'border-orange-500/30 bg-orange-500/5' :
+                'border-slate-700'
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -372,8 +405,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                         {sub.ratingAwarded > 0 ? '+' : ''}{sub.ratingAwarded}⭐
                       </span>
                     )}
-                    <Badge variant={sub.reviewStatus === 'APPROVED' ? 'success' : sub.reviewStatus === 'REJECTED' ? 'destructive' : 'warning'}>
-                      {sub.reviewStatus}
+                    <Badge variant={
+                      sub.reviewStatus === 'APPROVED'           ? 'success' :
+                      sub.reviewStatus === 'REJECTED'           ? 'destructive' :
+                      sub.reviewStatus === 'REVISION_REQUESTED' ? 'warning' : 'warning'
+                    }>
+                      {sub.reviewStatus === 'REVISION_REQUESTED' ? 'Revision Requested' : sub.reviewStatus}
                     </Badge>
                   </div>
                 </div>
@@ -405,6 +442,16 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                       >
                         {reviewing === sub.submissionId + 'APPROVE' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 border-orange-500/50 text-orange-300 hover:bg-orange-500/10"
+                        disabled={!!reviewing}
+                        onClick={() => handleReview(sub.submissionId, 'REVISE')}
+                      >
+                        {reviewing === sub.submissionId + 'REVISE' ? <Loader2 size={14} className="animate-spin" /> : null}
+                        Request Revision
                       </Button>
                       <Button
                         size="sm"

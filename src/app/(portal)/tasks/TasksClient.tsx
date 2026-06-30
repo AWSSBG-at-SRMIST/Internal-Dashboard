@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination } from '@/components/ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { formatDateTime, isDeadlinePassed, getAssignmentTypeColor, getDomainColor, getPriorityColor } from '@/lib/utils';
+import { formatDateTime, isDeadlinePassed, getAssignmentTypeColor, getAssignmentScopeLabel, getDomainColor, getPriorityColor } from '@/lib/utils';
 import Link from 'next/link';
 import type { Task } from '@/types';
 
@@ -32,7 +32,7 @@ function TaskCard({ task, index = 0 }: { task: Task; index?: number }) {
               <Badge variant={task.status === 'OPEN' ? (overdue ? 'destructive' : 'default') : 'secondary'} className="text-xs">
                 {task.status === 'OPEN' ? (overdue ? 'Overdue' : 'Open') : 'Closed'}
               </Badge>
-              <Badge className={`${getAssignmentTypeColor(task.assignmentType)} text-xs`}>{task.assignmentType}</Badge>
+              <Badge className={`${getAssignmentTypeColor(task.assignmentType)} text-xs`}>{getAssignmentScopeLabel(task.assignmentType)}</Badge>
               {task.domain && <Badge className={`${getDomainColor(task.domain)} text-xs`}>{task.domain}</Badge>}
               {task.priority && <Badge className={`${getPriorityColor(task.priority)} text-xs`}>{task.priority}</Badge>}
             </div>

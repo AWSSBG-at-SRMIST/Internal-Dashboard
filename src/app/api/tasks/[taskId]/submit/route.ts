@@ -24,26 +24,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
       return NextResponse.json({ error: 'You are not eligible to submit to this task' }, { status: 403 });
     }
 
-    // Paginate through all of the member's submissions to reliably detect duplicates
-    // (DynamoDB FilterExpression applies after the 1MB page limit, so a single
-    // query without pagination can miss submissions on subsequent pages).
-    // A REJECTED submission doesn't block a new attempt — only an active
-    // (PENDING or already-APPROVED) one does.
-    let lastKey: Record<string, any> | undefined;
-    do {
-      const existing = await db.send(new QueryCommand({
-        TableName: TABLE.SUBMISSIONS,
-        IndexName: 'MemberIndex',
-        KeyConditionExpression: 'memberId = :mid',
-        FilterExpression: 'taskId = :tid AND (reviewStatus = :pending OR reviewStatus = :approved)',
-        ExpressionAttributeValues: { ':mid': user.memberId, ':tid': taskId, ':pending': 'PENDING', ':approved': 'APPROVED' },
-        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      }));
-      if (existing.Items && existing.Items.length > 0) {
-        return NextResponse.json({ error: 'You have already submitted for this task' }, { status: 409 });
-      }
-      lastKey = existing.LastEvaluatedKey as Record<string, any> | undefined;
-    } while (lastKey);
+    const isCollective = task.Item.submissionMode === 'COLLECTIVE';
+
+    if (isCollective) {
+      // COLLECTIVE: lock the task once anyone submits — only one active submission allowed.
+      // Paginate to be safe (FilterExpression applies post-1MB-page).
+      let lastKey: Record<string, any> | undefined;
+      do {
+        const existing = await db.send(new QueryCommand({
+          TableName: TABLE.SUBMISSIONS,
+          IndexName: 'TaskIndex',
+          KeyConditionExpression: 'taskId = :tid',
+          FilterExpression: 'reviewStatus = :pending OR reviewStatus = :approved',
+          ExpressionAttributeValues: { ':tid': taskId, ':pending': 'PENDING', ':approved': 'APPROVED' },
+          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+        }));
+        if (existing.Items && existing.Items.length > 0) {
+          const blocker = existing.Items[0];
+          return NextResponse.json({
+            error: `This task has already been submitted by ${blocker.memberName}`,
+          }, { status: 409 });
+        }
+        lastKey = existing.LastEvaluatedKey as Record<string, any> | undefined;
+      } while (lastKey);
+    } else {
+      // INDIVIDUAL: only block if *this* member already has an active submission.
+      let lastKey: Record<string, any> | undefined;
+      do {
+        const existing = await db.send(new QueryCommand({
+          TableName: TABLE.SUBMISSIONS,
+          IndexName: 'MemberIndex',
+          KeyConditionExpression: 'memberId = :mid',
+          FilterExpression: 'taskId = :tid AND (reviewStatus = :pending OR reviewStatus = :approved)',
+          ExpressionAttributeValues: { ':mid': user.memberId, ':tid': taskId, ':pending': 'PENDING', ':approved': 'APPROVED' },
+          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+        }));
+        if (existing.Items && existing.Items.length > 0) {
+          return NextResponse.json({ error: 'You have already submitted for this task' }, { status: 409 });
+        }
+        lastKey = existing.LastEvaluatedKey as Record<string, any> | undefined;
+      } while (lastKey);
+    }
 
     const { content, links } = await req.json();
     if (!content?.trim()) return NextResponse.json({ error: 'Content is required' }, { status: 400 });
@@ -77,14 +98,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     };
 
     await db.send(new PutCommand({ TableName: TABLE.SUBMISSIONS, Item: submission }));
-
     await db.send(new UpdateCommand({
       TableName: TABLE.TASKS,
       Key: { taskId },
       UpdateExpression: 'SET totalSubmissions = totalSubmissions + :one',
       ExpressionAttributeValues: { ':one': 1 },
     }));
-
     await incrementPendingCount(user.memberId);
     await logAction(user, 'SUBMIT_TASK', 'SUBMISSION', submissionId, `Submitted task: ${task.Item.title}`);
 

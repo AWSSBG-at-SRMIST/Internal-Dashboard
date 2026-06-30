@@ -53,7 +53,24 @@ export interface Member {
   teamId?: string;
 }
 
-export type TaskAssignmentType = 'INDIVIDUAL' | 'DOMAIN' | 'SUBDOMAIN' | 'GENERAL';
+// Assignment scope — who a task is assigned to.
+// Scopes are strictly role-gated (see permissions.ts canCreateScope).
+export type TaskAssignmentScope =
+  | 'ORG_WIDE'             // Presidium → entire club
+  | 'ALL_DIRECTORS'        // Presidium → every Director across all domains
+  | 'SINGLE_DIRECTOR'      // Presidium → one specific Director (assignedToId required)
+  | 'DOMAIN_WIDE'          // Director  → all roles in their domain
+  | 'SUBDOMAIN_LEADERSHIP' // Director  → Manager + Associates of one subdomain (no Builders)
+  | 'SUBDOMAIN_WIDE'       // Manager   → all roles in their subdomain
+  | 'INDIVIDUAL'           // Manager   → one specific person in their subdomain (assignedToId required)
+  | 'BUILDERS_ONLY';       // Associate → all Builders in their subdomain
+
+// How submissions are counted for group-scoped tasks.
+// INDIVIDUAL: every eligible member submits their own work independently.
+// COLLECTIVE: first submitted + approved entry closes the task; once someone
+//   submits (PENDING), the task is locked — no one else can submit until that
+//   submission is rejected (which unlocks it for the next attempt).
+export type SubmissionMode = 'INDIVIDUAL' | 'COLLECTIVE';
 
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -63,7 +80,7 @@ export interface Task {
   description: string;
   deadline: string;
   priority: TaskPriority;
-  assignmentType: TaskAssignmentType;
+  assignmentType: TaskAssignmentScope;
   assignedToId: string | null;
   assignedToName: string;
   domain: Domain | null;
@@ -72,11 +89,12 @@ export interface Task {
   createdByName: string;
   createdAt: string;
   status: 'OPEN' | 'CLOSED';
+  submissionMode: SubmissionMode;
   totalSubmissions: number;
   reminderSentAt?: string | null;
 }
 
-export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ReviewStatus = 'PENDING' | 'REVISION_REQUESTED' | 'APPROVED' | 'REJECTED';
 
 export interface Submission {
   submissionId: string;
@@ -102,7 +120,6 @@ export interface Rating {
   domain: Domain | null;
   subdomain: Subdomain | null;
   role: Role;
-  totalStars: number;
   approvedCount: number;
   lateApprovedCount: number;
   rejectedCount: number;

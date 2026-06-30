@@ -31,13 +31,34 @@ function isAuthorized(req: NextRequest): boolean {
   return (!!bearer && safeEqual(bearer, `Bearer ${secret}`)) || (!!headerSecret && safeEqual(headerSecret, secret));
 }
 
-// Not every assignment type has an index to query — GENERAL/DOMAIN/SUBDOMAIN
-// all need the full active-member list to resolve who's eligible.
+// Resolves which members are eligible for a task's reminder.
+// Handles all current scopes and legacy types (PERSONAL/BROADCAST/INDIVIDUAL/GENERAL/DOMAIN/SUBDOMAIN).
 function getEligibleMembers(task: any, members: any[]): any[] {
-  if (task.assignmentType === 'GENERAL') return members;
-  if (task.assignmentType === 'INDIVIDUAL') return members.filter(m => m.memberId === task.assignedToId);
-  if (task.assignmentType === 'DOMAIN') return members.filter(m => m.domain === task.domain);
-  if (task.assignmentType === 'SUBDOMAIN') return members.filter(m => m.domain === task.domain && m.subdomain === task.subdomain);
+  const type = task.assignmentType;
+  // Everyone
+  if (type === 'ORG_WIDE' || type === 'GENERAL') return members;
+  // All Directors
+  if (type === 'ALL_DIRECTORS') return members.filter(m => m.role === 'DIRECTOR');
+  // Targeted at one person
+  if (type === 'SINGLE_DIRECTOR' || type === 'INDIVIDUAL' || type === 'PERSONAL')
+    return members.filter(m => m.memberId === task.assignedToId);
+  // Entire domain
+  if (type === 'DOMAIN_WIDE' || type === 'DOMAIN') return members.filter(m => m.domain === task.domain);
+  // Subdomain leadership: Manager + Associates (no Builders)
+  if (type === 'SUBDOMAIN_LEADERSHIP') return members.filter(m =>
+    m.domain === task.domain && m.subdomain === task.subdomain &&
+    (m.role === 'MANAGER' || m.role === 'ASSOCIATE')
+  );
+  // Entire subdomain
+  if (type === 'SUBDOMAIN_WIDE' || type === 'SUBDOMAIN') return members.filter(m => m.domain === task.domain && m.subdomain === task.subdomain);
+  // Builders only
+  if (type === 'BUILDERS_ONLY') return members.filter(m => m.domain === task.domain && m.subdomain === task.subdomain && m.role === 'BUILDER');
+  // Legacy BROADCAST: org-wide if no domain, domain-scoped if domain set, subdomain-scoped if both set
+  if (type === 'BROADCAST') {
+    if (!task.domain) return members;
+    if (!task.subdomain) return members.filter(m => m.domain === task.domain);
+    return members.filter(m => m.domain === task.domain && m.subdomain === task.subdomain);
+  }
   return [];
 }
 

@@ -40,7 +40,7 @@ export default async function ProfilePage() {
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-slate-100 truncate">{user.name}</h2>
               <div className="flex flex-wrap gap-2 mt-2">
-                <Badge className={getRoleColor(user.role)}>{formatRole(user.role, user.domain)}</Badge>
+                <Badge className={getRoleColor(user.role, user.domain)}>{formatRole(user.role, user.domain)}</Badge>
                 {user.domain && user.role !== 'DIRECTOR' && <Badge className={getDomainColor(user.domain)}>{user.domain}</Badge>}
                 {user.subdomain && <Badge className={getSubdomainColor(user.subdomain)}>{user.subdomain}</Badge>}
               </div>
@@ -111,7 +111,7 @@ export default async function ProfilePage() {
               <div className="space-y-3">
                 {recentSubs.map((sub: any) => (
                   <div key={sub.submissionId} className="flex items-center gap-3 p-3 border border-slate-800 rounded-lg">
-                    <div className={`w-2 h-2 rounded-full ${sub.reviewStatus === 'APPROVED' ? 'bg-green-400' : sub.reviewStatus === 'REJECTED' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+                    <div className={`w-2 h-2 rounded-full ${sub.reviewStatus === 'APPROVED' ? 'bg-green-400' : sub.reviewStatus === 'REJECTED' ? 'bg-red-400' : sub.reviewStatus === 'REVISION_REQUESTED' ? 'bg-orange-400' : 'bg-yellow-400'}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-100 truncate">{sub.taskTitle}</p>
                       <p className="text-xs text-slate-500">{formatDateTime(sub.submittedAt)} · {getSubmissionTimingLabel(sub.submittedAt, sub.deadline)}</p>
@@ -123,7 +123,7 @@ export default async function ProfilePage() {
                         </span>
                       )}
                       <Badge variant={sub.reviewStatus === 'APPROVED' ? 'success' : sub.reviewStatus === 'REJECTED' ? 'destructive' : 'warning'} className="text-xs">
-                        {sub.reviewStatus}
+                        {sub.reviewStatus === 'REVISION_REQUESTED' ? 'Revision' : sub.reviewStatus}
                       </Badge>
                     </div>
                   </div>

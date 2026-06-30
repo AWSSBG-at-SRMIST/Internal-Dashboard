@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:members": "node --env-file=.env.local scripts/import-members.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1070.0",

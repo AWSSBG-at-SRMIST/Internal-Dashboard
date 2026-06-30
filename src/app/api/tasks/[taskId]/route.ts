@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, GetCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { isPresidium, canCreateTask, isTaskVisible, canSubmitTask } from '@/lib/permissions';
+import { reverseSubmissionRating } from '@/lib/ratings';
 import { autoCloseIfExpired } from '@/lib/tasks';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
@@ -31,16 +32,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
     }
 
     const submissions = submissionsResult.Items || [];
-    // A member can have multiple submission attempts (e.g. resubmitting after
-    // a rejection) — "my submission" means the most recent one.
     const mySubmissions = submissions.filter((s: any) => s.memberId === user.memberId)
       .sort((a: any, b: any) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
     const mySubmission = mySubmissions[0];
 
+    // COLLECTIVE tasks: once any PENDING or APPROVED submission exists, the task is
+    // locked — nobody else can submit until that submission is rejected.
+    const isCollective = taskResult.Item.submissionMode === 'COLLECTIVE';
+    let collectiveLockedBy: { memberId: string; memberName: string } | null = null;
+    if (isCollective) {
+      const active = submissions.find((s: any) => s.reviewStatus === 'PENDING' || s.reviewStatus === 'APPROVED');
+      if (active) collectiveLockedBy = { memberId: active.memberId, memberName: active.memberName };
+    }
+
     const canReview = isPresidium(user) || user.role === 'DIRECTOR' || user.role === 'MANAGER';
     const visibleSubmissions = canReview ? submissions : mySubmissions;
     const canSubmit = taskResult.Item.status === 'OPEN'
-      && (!mySubmission || mySubmission.reviewStatus === 'REJECTED')
+      && !collectiveLockedBy
+      && (!mySubmission || mySubmission.reviewStatus === 'REJECTED' || mySubmission.reviewStatus === 'REVISION_REQUESTED')
       && canSubmitTask(user, taskResult.Item as any);
     const canDelete = isPresidium(user) || taskResult.Item.createdBy === user.memberId;
     const canClose = canReview || taskResult.Item.createdBy === user.memberId;
@@ -55,6 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
         canSubmit,
         canDelete,
         canClose,
+        collectiveLockedBy,
       },
     });
   } catch (error) {
@@ -86,7 +96,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
     const canReview = isPresidium(user) || user.role === 'DIRECTOR' || user.role === 'MANAGER';
     const isCreator = task.Item.createdBy === user.memberId;
 
-    if (!isCreator && !isPresidium(user)) {
+    // Mirrors GET's canClose (canReview || isCreator) — a reviewer who didn't
+    // create the task must still be able to close it, not just see the button.
+    if (!isCreator && !canReview) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -153,6 +165,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
     }));
     const subs = subsResult.Items || [];
     if (subs.length > 0) {
+      // Reverse rating effects before deleting — each approved submission added
+      // stars to the member's total; deletion must undo that.
+      await Promise.all(subs.map((s: any) => reverseSubmissionRating(s)));
       await Promise.all(subs.map((s: any) =>
         db.send(new DeleteCommand({ TableName: TABLE.SUBMISSIONS, Key: { submissionId: s.submissionId } }))
       ));
