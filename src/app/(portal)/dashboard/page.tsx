@@ -118,7 +118,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className={isBuilder ? 'grid lg:grid-cols-2 gap-6' : 'grid lg:grid-cols-3 gap-6'}>
+      <div className={isBuilder ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'grid grid-cols-1 lg:grid-cols-3 gap-6'}>
         {/* My Tasks */}
         <Card>
           <CardHeader className="pb-3">
@@ -136,19 +136,18 @@ export default async function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {stats.myTasks.map((task: any) => (
-                  <Link href={`/tasks/${task.taskId}`} key={task.taskId}>
-                    <div className="flex items-start gap-3 p-3 hover:bg-[#1a1a1a] transition-colors border border-[#1e1e1e]">
+                  <Link href={`/tasks/${task.taskId}`} key={task.taskId} className="block overflow-hidden">
+                    <div className="flex items-start gap-2 p-3 hover:bg-[#1a1a1a] transition-colors border-2 border-[#2d2d2d] overflow-hidden">
                       <div className="w-2 h-2 bg-[#FF9900] mt-1.5 flex-shrink-0" />
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <p className="text-sm font-medium text-[#f0f0f0] truncate">{task.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Clock size={12} className="text-[#555]" />
-                          <p className="text-xs text-[#555]">Due {formatDateTime(task.deadline)}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <Badge className={`${getAssignmentTypeColor(task.assignmentType)} text-xs`}>
+                            {getAssignmentScopeLabel(task.assignmentType)}
+                          </Badge>
+                          <span className="text-xs text-[#555] truncate">Due {formatDateTime(task.deadline)}</span>
                         </div>
                       </div>
-                      <Badge className={`${getAssignmentTypeColor(task.assignmentType)} text-xs flex-shrink-0`}>
-                        {getAssignmentScopeLabel(task.assignmentType)}
-                      </Badge>
                     </div>
                   </Link>
                 ))}
@@ -175,19 +174,18 @@ export default async function DashboardPage() {
               ) : (
                 <div className="space-y-2">
                   {stats.teamTasks.map((task: any) => (
-                    <Link href={`/tasks/${task.taskId}`} key={task.taskId}>
-                      <div className="flex items-start gap-3 p-3 hover:bg-[#1a1a1a] transition-colors border-2 border-[#2d2d2d]">
+                    <Link href={`/tasks/${task.taskId}`} key={task.taskId} className="block overflow-hidden">
+                      <div className="flex items-start gap-2 p-3 hover:bg-[#1a1a1a] transition-colors border-2 border-[#2d2d2d] overflow-hidden">
                         <div className="w-2 h-2 bg-purple-400 mt-1.5 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 overflow-hidden">
                           <p className="text-sm font-medium text-[#f0f0f0] truncate">{task.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Clock size={12} className="text-[#555]" />
-                            <p className="text-xs text-[#555]">Due {formatDateTime(task.deadline)}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {getAssignmentScopeLabel(task.assignmentType)}
+                            </Badge>
+                            <span className="text-xs text-[#555] truncate">Due {formatDateTime(task.deadline)}</span>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="text-xs flex-shrink-0">
-                          {getAssignmentScopeLabel(task.assignmentType)}
-                        </Badge>
                       </div>
                     </Link>
                   ))}
@@ -222,9 +220,9 @@ export default async function DashboardPage() {
                     }`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f0f0f0] truncate">{sub.taskTitle}</p>
-                      <p className="text-xs text-[#555]">{timeAgo(sub.submittedAt)}</p>
+                      <p className="text-xs text-[#888]">{timeAgo(sub.submittedAt)}</p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {sub.ratingAwarded != null && (
                         <span className={`text-xs font-bold ${sub.ratingAwarded > 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {sub.ratingAwarded > 0 ? '+' : ''}{sub.ratingAwarded}⭐
@@ -234,7 +232,7 @@ export default async function DashboardPage() {
                         variant={sub.reviewStatus === 'APPROVED' ? 'success' : sub.reviewStatus === 'REJECTED' ? 'destructive' : 'warning'}
                         className="text-xs"
                       >
-                        {sub.reviewStatus}
+                        {sub.reviewStatus === 'REVISION_REQUESTED' ? 'Revision' : sub.reviewStatus}
                       </Badge>
                     </div>
                   </div>

@@ -148,12 +148,12 @@ export function Sidebar({ user, children }: SidebarProps) {
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-6 min-w-0 overscroll-contain">
           {children}
+          <footer className="border-t border-[#2d2d2d] mt-6 py-2.5">
+            <p className="text-[10px] text-[#f0f0f0] font-mono text-center tracking-wide">
+              Made with ♥ by Tech Team for AWS SBG at SRMIST &nbsp;·&nbsp; Strictly for internal use only.
+            </p>
+          </footer>
         </main>
-        <footer className="flex-shrink-0 border-t border-[#2d2d2d] px-4 lg:px-6 py-2.5 bg-[#050505]">
-          <p className="text-[10px] text-[#f0f0f0] font-mono text-center tracking-wide">
-            Made with ♥ by Tech Team for AWS SBG at SRMIST &nbsp;·&nbsp; Strictly for internal use only.
-          </p>
-        </footer>
       </div>
     </div>
   );

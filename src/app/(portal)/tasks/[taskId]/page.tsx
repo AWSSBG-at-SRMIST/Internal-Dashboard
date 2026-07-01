@@ -342,12 +342,18 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#aaa] uppercase tracking-wide">Your work / response *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-[#aaa] uppercase tracking-wide">Your work / response *</label>
+                    <span className={`text-xs font-mono font-bold ${content.length > 100 ? 'text-red-400' : content.length > 80 ? 'text-yellow-400' : 'text-[#555]'}`}>
+                      {content.length}/100
+                    </span>
+                  </div>
                   <Textarea
                     value={content}
                     onChange={e => setContent(e.target.value)}
-                    placeholder="Describe what you've done, include key details, findings, or deliverables..."
-                    className="min-h-[120px]"
+                    placeholder="Describe what you've done..."
+                    className="min-h-[80px]"
+                    maxLength={100}
                     required
                     autoFocus
                   />
@@ -377,7 +383,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                 </div>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowSubmitForm(false)}>Cancel</Button>
-                  <Button type="submit" disabled={submitting}>
+                  <Button type="submit" disabled={submitting || content.length > 100}>
                     {submitting ? <><Loader2 size={14} className="animate-spin" /> Submitting...</> : 'Submit Work'}
                   </Button>
                 </div>
@@ -415,12 +421,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       {canReview && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>Submissions ({submissions.length})</span>
-              <div className="flex gap-3 text-xs font-mono">
-                <span className="text-green-400">{submissions.filter(s => s.reviewStatus === 'APPROVED').length} approved</span>
-                <span className="text-yellow-400">{submissions.filter(s => s.reviewStatus === 'PENDING').length} pending</span>
-                <span className="text-red-400">{submissions.filter(s => s.reviewStatus === 'REJECTED').length} rejected</span>
+            <CardTitle className="text-base">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <span>Submissions ({submissions.length})</span>
+                <div className="flex gap-3 text-xs font-mono font-normal">
+                  <span className="text-green-400">{submissions.filter(s => s.reviewStatus === 'APPROVED').length} approved</span>
+                  <span className="text-yellow-400">{submissions.filter(s => s.reviewStatus === 'PENDING').length} pending</span>
+                  <span className="text-red-400">{submissions.filter(s => s.reviewStatus === 'REJECTED').length} rejected</span>
+                </div>
               </div>
             </CardTitle>
           </CardHeader>
@@ -495,7 +503,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                         onClick={() => handleReview(sub.submissionId, 'REVISE')}
                       >
                         {reviewing === sub.submissionId + 'REVISE' ? <Loader2 size={14} className="animate-spin" /> : null}
-                        Request Revision
+                        <span className="sm:hidden">Revise</span>
+                        <span className="hidden sm:inline">Request Revision</span>
                       </Button>
                       <Button
                         size="sm"

@@ -120,7 +120,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
     }
 
     const setParts: string[] = [];
-    const exprNames: Record<string, string> = { '#s': 'status' };
+    const exprNames: Record<string, string> = {};
     const exprValues: Record<string, any> = {};
 
     if (title !== undefined)       { setParts.push('title = :t');      exprValues[':t']  = title; }
@@ -129,9 +129,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
     if (deadline !== undefined) {
       setParts.push('deadline = :dl', 'reminderSentAt = :null');
       exprValues[':dl'] = deadline;
-      exprValues[':null'] = null; // new deadline means the old reminder cycle no longer applies
+      exprValues[':null'] = null;
     }
-    if (status !== undefined)      { setParts.push('#s = :s');          exprValues[':s']  = status; }
+    if (status !== undefined)      { exprNames['#s'] = 'status'; setParts.push('#s = :s'); exprValues[':s'] = status; }
 
     if (setParts.length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
@@ -141,7 +141,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       TableName: TABLE.TASKS,
       Key: { taskId },
       UpdateExpression: `SET ${setParts.join(', ')}`,
-      ExpressionAttributeNames: exprNames,
+      ...(Object.keys(exprNames).length > 0 && { ExpressionAttributeNames: exprNames }),
       ExpressionAttributeValues: exprValues,
     }));
 

@@ -69,10 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     const { content, links } = await req.json();
     if (!content?.trim()) return NextResponse.json({ error: 'Content is required' }, { status: 400 });
 
-    const MAX_CONTENT_LENGTH = 10_000;
+    const MAX_CONTENT_LENGTH = 100;
     const MAX_LINKS = 20;
     if (content.trim().length > MAX_CONTENT_LENGTH) {
-      return NextResponse.json({ error: `Content exceeds maximum length (${MAX_CONTENT_LENGTH} characters)` }, { status: 400 });
+      return NextResponse.json({ error: `Content must be 100 characters or less` }, { status: 400 });
     }
 
     const validLinks = (links || []).slice(0, MAX_LINKS).filter((l: string) => {

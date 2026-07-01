@@ -26,7 +26,8 @@ function MemberMobileCard({ member, hideDomain, hideStars, hideSubdomain, delay 
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-[#f0f0f0] truncate uppercase tracking-wide">{member.name}</p>
-          <p className="text-xs text-[#555] truncate font-mono">{member.officialEmail}</p>
+          <p className="text-xs text-[#888] truncate font-mono">{member.officialEmail}</p>
+          {member.clubId && <p className="text-xs text-[#f0f0f0] font-mono">{member.clubId}</p>}
         </div>
         {!hideStars && (
           <span className={`text-sm font-bold flex-shrink-0 font-mono ${getStarColor(member.totalStars)}`}>
@@ -84,7 +85,7 @@ function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { member
                 <div className="flex items-center gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-[#f0f0f0] truncate">{member.name}</p>
-                    <p className="text-xs text-[#555] truncate font-mono">{member.officialEmail}</p>
+                    <p className="text-xs text-[#888] truncate font-mono">{member.officialEmail}</p>
                   </div>
                 </div>
               </td>

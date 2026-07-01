@@ -1,11 +1,12 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { FileText, Search, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Search, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Pagination } from '@/components/ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
@@ -24,6 +25,7 @@ const ACTION_COLORS: Record<string, string> = {
   SUBMIT_TASK:        'bg-purple-500/20 text-purple-300',
   APPROVE_SUBMISSION: 'bg-emerald-500/20 text-emerald-300',
   REJECT_SUBMISSION:  'bg-pink-500/20 text-pink-300',
+  REVISE_SUBMISSION:  'bg-orange-500/20 text-orange-300',
   CREATE_LINK:        'bg-cyan-500/20 text-cyan-300',
   DELETE_LINK:        'bg-amber-500/20 text-amber-300',
   CREATE_COHORT:      'bg-teal-500/20 text-teal-300',
@@ -33,20 +35,30 @@ const ACTION_COLORS: Record<string, string> = {
   GENERATE_MOM:       'bg-violet-500/20 text-violet-300',
 };
 
+const ALL_ACTIONS = Object.keys(ACTION_COLORS);
+const ALL_TARGET_TYPES = ['MEMBER', 'TASK', 'SUBMISSION', 'LINK', 'SYSTEM'];
+
 export default function AuditLogsClient({ initialLogs }: { initialLogs: AuditLog[] }) {
   const [logs, setLogs] = useState<AuditLog[]>(initialLogs);
   const [search, setSearch] = useState('');
+  const [actionFilter, setActionFilter] = useState('ALL');
+  const [targetFilter, setTargetFilter] = useState('ALL');
   const [showClear, setShowClear] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const filtered = useMemo(() => logs.filter(l =>
-    !search ||
-    l.action.toLowerCase().includes(search.toLowerCase()) ||
-    l.performedByName.toLowerCase().includes(search.toLowerCase()) ||
-    l.details.toLowerCase().includes(search.toLowerCase())
-  ), [logs, search]);
+  const filtered = useMemo(() => logs.filter(l => {
+    const matchSearch = !search ||
+      l.action.toLowerCase().includes(search.toLowerCase()) ||
+      l.performedByName.toLowerCase().includes(search.toLowerCase()) ||
+      l.details.toLowerCase().includes(search.toLowerCase());
+    const matchAction = actionFilter === 'ALL' || l.action === actionFilter;
+    const matchTarget = targetFilter === 'ALL' || l.targetType === targetFilter;
+    return matchSearch && matchAction && matchTarget;
+  }), [logs, search, actionFilter, targetFilter]);
 
   const { page, setPage, totalPages, paginatedItems } = usePagination(filtered, PAGE_SIZE);
+
+  const hasFilters = search || actionFilter !== 'ALL' || targetFilter !== 'ALL';
 
   async function clearLogs() {
     setClearing(true);
@@ -56,6 +68,8 @@ export default function AuditLogsClient({ initialLogs }: { initialLogs: AuditLog
       if (!data.success) throw new Error();
       setLogs(data.data ? [data.data] : []);
       setSearch('');
+      setActionFilter('ALL');
+      setTargetFilter('ALL');
       toast.success(`Cleared ${data.deleted} log entries`);
       setShowClear(false);
     } catch {
@@ -79,9 +93,40 @@ export default function AuditLogsClient({ initialLogs }: { initialLogs: AuditLog
         )}
       </div>
 
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
-        <Input placeholder="Search by action, user, or details..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+      <div className="flex flex-col gap-3">
+        <div className="relative w-full">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+          <Input placeholder="Search by action, user, or details..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger className="flex-1 min-w-[140px]">
+              <SelectValue placeholder="Action" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Actions</SelectItem>
+              {ALL_ACTIONS.map(a => (
+                <SelectItem key={a} value={a}>{a.replace(/_/g, ' ')}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={targetFilter} onValueChange={setTargetFilter}>
+            <SelectTrigger className="flex-1 min-w-[130px]">
+              <SelectValue placeholder="Target" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Types</SelectItem>
+              {ALL_TARGET_TYPES.map(t => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setActionFilter('ALL'); setTargetFilter('ALL'); }}>
+              <X size={14} /> Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (

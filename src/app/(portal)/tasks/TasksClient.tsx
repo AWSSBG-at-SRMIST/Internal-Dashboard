@@ -21,9 +21,9 @@ function TaskCard({ task, index = 0 }: { task: Task; index?: number }) {
     : 'border-[#1e1e1e] bg-[#0d0d0d]';
 
   return (
-    <Link href={`/tasks/${task.taskId}`}>
+    <Link href={`/tasks/${task.taskId}`} className="block overflow-hidden">
       <div
-        className={`border-2 p-4 hover:border-[#FF9900] transition-all cursor-pointer animate-fadeIn ${statusBorder}`}
+        className={`border-2 p-4 hover:border-[#FF9900] transition-all cursor-pointer animate-fadeIn overflow-hidden ${statusBorder}`}
         style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -43,11 +43,11 @@ function TaskCard({ task, index = 0 }: { task: Task; index?: number }) {
             <p className="text-xs text-[#555] font-mono">{task.totalSubmissions} sub</p>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 mt-3 pt-3 border-t border-[#1e1e1e]">
-          <p className="text-xs text-[#888]">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mt-3 pt-3 border-t border-[#1e1e1e]">
+          <p className="text-xs text-[#888] truncate min-w-0">
             → <span className="font-bold text-[#d0d0d0]">{task.assignedToName}</span>
           </p>
-          <div className="flex items-center gap-1 text-xs text-[#888] font-mono">
+          <div className="flex items-center gap-1 text-xs text-[#888] font-mono flex-shrink-0">
             <Clock size={12} className={overdue ? 'text-red-400' : 'text-[#555]'} />
             <span className={overdue ? 'text-red-400 font-bold' : ''}>
               {dueLabel}: {formatDateTime(task.deadline)}
@@ -67,7 +67,7 @@ function TaskSection({ title, tasks, dimmed }: { title: string; tasks: Task[]; d
       <h2 className={`text-xs font-bold uppercase tracking-widest mb-3 border-l-2 pl-3 ${dimmed ? 'text-[#555] border-[#333]' : 'text-[#888] border-[#FF9900]'}`}>
         {title} ({tasks.length})
       </h2>
-      <div className={`grid gap-2 ${dimmed ? 'opacity-60' : ''}`}>
+      <div className={`grid grid-cols-1 gap-2 ${dimmed ? 'opacity-60' : ''}`}>
         {paginatedItems.map((task, i) => <TaskCard key={task.taskId} task={task} index={i} />)}
       </div>
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
@@ -105,8 +105,8 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+      <div className="flex flex-col gap-3">
+        <div className="relative w-full">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
           <Input
             placeholder="Search tasks..."
@@ -115,43 +115,45 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Status</SelectItem>
-            <SelectItem value="OPEN">Open</SelectItem>
-            <SelectItem value="CLOSED">Closed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={domainFilter} onValueChange={setDomainFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Domain" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Domains</SelectItem>
-            <SelectItem value="Technical">Technical</SelectItem>
-            <SelectItem value="Corporate">Corporate</SelectItem>
-            <SelectItem value="Creatives">Creatives</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Priorities</SelectItem>
-            <SelectItem value="HIGH">High</SelectItem>
-            <SelectItem value="MEDIUM">Medium</SelectItem>
-            <SelectItem value="LOW">Low</SelectItem>
-          </SelectContent>
-        </Select>
-        {(search || statusFilter !== 'ALL' || domainFilter !== 'ALL' || priorityFilter !== 'ALL') && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter('ALL'); setDomainFilter('ALL'); setPriorityFilter('ALL'); }}>
-            <X size={14} /> Clear
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-3">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="flex-1 min-w-[110px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Status</SelectItem>
+              <SelectItem value="OPEN">Open</SelectItem>
+              <SelectItem value="CLOSED">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={domainFilter} onValueChange={setDomainFilter}>
+            <SelectTrigger className="flex-1 min-w-[120px]">
+              <SelectValue placeholder="Domain" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Domains</SelectItem>
+              <SelectItem value="Technical">Technical</SelectItem>
+              <SelectItem value="Corporate">Corporate</SelectItem>
+              <SelectItem value="Creatives">Creatives</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="flex-1 min-w-[110px]">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Priorities</SelectItem>
+              <SelectItem value="HIGH">High</SelectItem>
+              <SelectItem value="MEDIUM">Medium</SelectItem>
+              <SelectItem value="LOW">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          {(search || statusFilter !== 'ALL' || domainFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter('ALL'); setDomainFilter('ALL'); setPriorityFilter('ALL'); }}>
+              <X size={14} /> Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (

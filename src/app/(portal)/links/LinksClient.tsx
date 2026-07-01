@@ -146,10 +146,10 @@ export default function LinksClient({ me, initialLinks }: { me: SessionUser; ini
                       </div>
                       {link.description && <p className="text-sm font-bold text-[#f0f0f0] mb-1 uppercase tracking-wide">{link.description}</p>}
                       <a href={link.originalUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-[#555] hover:text-[#FF9900] flex items-center gap-1 truncate font-mono">
+                        className="text-xs text-[#888] hover:text-[#FF9900] flex items-center gap-1 truncate font-mono">
                         {link.originalUrl}<ExternalLink size={10} />
                       </a>
-                      <p className="text-xs text-[#555] mt-1 font-mono">
+                      <p className="text-xs text-[#888] mt-1 font-mono">
                         by <span className="text-[#888] font-bold">{link.createdByName}</span> · {formatDateTime(link.createdAt)} ({timeAgo(link.createdAt)})
                       </p>
                     </div>
@@ -189,7 +189,7 @@ export default function LinksClient({ me, initialLinks }: { me: SessionUser; ini
             <div className="space-y-2">
               <Label>Custom Code (optional)</Label>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-[#555] whitespace-nowrap font-mono">{appUrl}/s/</span>
+                <span className="text-sm text-[#888] font-mono whitespace-nowrap"><span className="hidden sm:inline">{appUrl}</span>/s/</span>
                 <div className="relative flex-1">
                   <Input
                     placeholder="my-link"
