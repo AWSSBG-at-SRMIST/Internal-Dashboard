@@ -96,12 +96,13 @@ export default function LinksClient({ me, initialLinks }: { me: SessionUser; ini
   }
 
   function copyLink(code: string) {
-    const url = `${window.location.origin}/s/${code}`;
+    const base = process.env.NEXT_PUBLIC_SHORT_LINK_BASE_URL || window.location.origin;
+    const url = `${base}/s/${code}`;
     navigator.clipboard.writeText(url);
     toast.success('Link copied!');
   }
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const appUrl = process.env.NEXT_PUBLIC_SHORT_LINK_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
   if (me.role === 'BUILDER') {
     return (
