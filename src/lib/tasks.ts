@@ -1,4 +1,27 @@
 import { db, TABLE, UpdateCommand, ScanCommand } from '@/lib/dynamodb';
+
+// Resolves which members are eligible for a task's assignment scope.
+// Handles all current scopes and legacy types (PERSONAL/BROADCAST/INDIVIDUAL/GENERAL/DOMAIN/SUBDOMAIN).
+export function getEligibleMembers(task: any, members: any[]): any[] {
+  const type = task.assignmentType;
+  if (type === 'ORG_WIDE' || type === 'GENERAL') return members;
+  if (type === 'ALL_DIRECTORS') return members.filter((m: any) => m.role === 'DIRECTOR');
+  if (type === 'SINGLE_DIRECTOR' || type === 'INDIVIDUAL' || type === 'PERSONAL')
+    return members.filter((m: any) => m.memberId === task.assignedToId);
+  if (type === 'DOMAIN_WIDE' || type === 'DOMAIN') return members.filter((m: any) => m.domain === task.domain);
+  if (type === 'SUBDOMAIN_LEADERSHIP') return members.filter((m: any) =>
+    m.domain === task.domain && m.subdomain === task.subdomain &&
+    (m.role === 'MANAGER' || m.role === 'ASSOCIATE')
+  );
+  if (type === 'SUBDOMAIN_WIDE' || type === 'SUBDOMAIN') return members.filter((m: any) => m.domain === task.domain && m.subdomain === task.subdomain);
+  if (type === 'BUILDERS_ONLY') return members.filter((m: any) => m.domain === task.domain && m.subdomain === task.subdomain && m.role === 'BUILDER');
+  if (type === 'BROADCAST') {
+    if (!task.domain) return members;
+    if (!task.subdomain) return members.filter((m: any) => m.domain === task.domain);
+    return members.filter((m: any) => m.domain === task.domain && m.subdomain === task.subdomain);
+  }
+  return [];
+}
 import { isDeadlinePassed } from '@/lib/utils';
 import { isTaskVisible } from '@/lib/permissions';
 import type { SessionUser, Task } from '@/types';

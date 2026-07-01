@@ -201,6 +201,56 @@ export async function sendTaskAssignmentEmail(
   });
 }
 
+// ─── Delegate Review Email ────────────────────────────────────────────────────
+
+export async function sendDelegateReviewEmail(
+  email: string,
+  name: string,
+  taskTitle: string,
+  delegatedByName: string,
+  taskUrl: string,
+) {
+  const body = `
+    <p style="color:#aaa;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0 0 20px;">
+      Review Delegation
+    </p>
+
+    <p style="color:#f0f0f0;font-size:15px;font-weight:bold;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">
+      Hello, ${escHtml(name)}.
+    </p>
+    <p style="color:#f0f0f0;font-size:13px;margin:0 0 24px;">
+      You have been assigned as a delegated reviewer for the following task on the AWSSBG Internal Dashboard.
+    </p>
+
+    <div style="background:#050505;border:2px solid #2d2d2d;border-left:4px solid #FF9900;padding:20px 20px 18px;margin-bottom:24px;">
+      <p style="color:#f0f0f0;font-size:16px;font-weight:bold;margin:0 0 10px;text-transform:uppercase;letter-spacing:1px;">
+        ${escHtml(taskTitle)}
+      </p>
+      <span style="color:#FF9900;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
+        REVIEW DELEGATED TO YOU
+      </span>
+    </div>
+
+    <p style="color:#f0f0f0;font-size:13px;margin:0 0 24px;">
+      You can now review, approve, reject, or request revisions for all submissions on this task on behalf of
+      <strong style="color:#FF9900;">${escHtml(delegatedByName)}</strong>.
+    </p>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      ${metaRow('Delegated by', escHtml(delegatedByName))}
+      ${metaRow('Task', escHtml(taskTitle))}
+    </table>
+
+    ${ctaButton(taskUrl, 'Open Task')}`;
+
+  await transporter.sendMail({
+    from: `"AWSSBG Internal Dashboard" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: `[REVIEW DELEGATED] ${taskTitle} — AWSSBG Dashboard`,
+    html: shell('Review Delegation', body),
+  });
+}
+
 // ─── Task Reminder Email ──────────────────────────────────────────────────────
 
 export async function sendTaskReminderEmail(

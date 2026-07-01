@@ -92,6 +92,8 @@ export interface Task {
   submissionMode: SubmissionMode;
   totalSubmissions: number;
   reminderSentAt?: string | null;
+  delegatedReviewers?: Array<{ memberId: string; memberName: string }>;
+  noSubmissionPenaltyAt?: string | null;
 }
 
 export type ReviewStatus = 'PENDING' | 'REVISION_REQUESTED' | 'APPROVED' | 'REJECTED';

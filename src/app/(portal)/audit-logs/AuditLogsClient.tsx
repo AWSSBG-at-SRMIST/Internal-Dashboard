@@ -33,6 +33,8 @@ const ACTION_COLORS: Record<string, string> = {
   SETUP_TABLES:       'bg-[#2a2a2a] text-[#aaa]',
   CLEAR_AUDIT_LOGS:   'bg-red-500/20 text-red-300',
   GENERATE_MOM:       'bg-violet-500/20 text-violet-300',
+  AUTO_CLOSE_TASK:    'bg-rose-500/20 text-rose-300',
+  SEND_TASK_REMINDERS:'bg-[#2a2a2a] text-[#aaa]',
 };
 
 const ALL_ACTIONS = Object.keys(ACTION_COLORS);
