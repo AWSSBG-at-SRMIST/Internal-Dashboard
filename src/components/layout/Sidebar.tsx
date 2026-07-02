@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X
+  FileText, NotebookPen, LogOut, Menu, X, Download
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
 import { canGenerateMoM } from '@/lib/permissions';
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
+  { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 
 function NavPanel({ user, visibleItems, pathname, onNavigate, onLogout }: {

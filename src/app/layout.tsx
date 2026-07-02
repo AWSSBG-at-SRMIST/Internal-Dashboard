@@ -3,16 +3,27 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Analytics } from '@vercel/analytics/next';
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 
 export const metadata: Metadata = {
   title: 'Internal Dashboard | @AWSSBG-at-SRMIST',
   description: 'Internal operations dashboard for AWS Student Builder Group at SRMIST',
-  icons: { icon: '/logo.png' },
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/logo.png',
+    apple: '/icons/icon-192x192.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'AWSSBG',
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#FF9900',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         />
+        <ServiceWorkerRegistrar />
         <SpeedInsights />
         <Analytics />
       </body>
