@@ -263,7 +263,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
           <Button variant="ghost" size="icon" className="mt-1 flex-shrink-0"><ArrowLeft size={18} /></Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap gap-2 mb-2">
                 <Badge variant={task.status === 'OPEN' ? (overdue ? 'destructive' : 'default') : 'secondary'}>
@@ -601,36 +601,35 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                       placeholder="Feedback for the submitter (optional)..."
                       className="min-h-[60px] text-sm"
                     />
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <Button
                         size="sm"
-                        className="flex-1"
+                        className="w-full"
                         disabled={!!reviewing}
                         onClick={() => handleReview(sub.submissionId, 'APPROVE')}
                       >
                         {reviewing === sub.submissionId + 'APPROVE' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                        Approve
+                        <span className="truncate">Approve</span>
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="flex-1 border-orange-500/50 text-orange-300 hover:bg-orange-500/10"
+                        className="w-full border-orange-500/50 text-orange-300 hover:bg-orange-500/10"
                         disabled={!!reviewing}
                         onClick={() => handleReview(sub.submissionId, 'REVISE')}
                       >
                         {reviewing === sub.submissionId + 'REVISE' ? <Loader2 size={14} className="animate-spin" /> : null}
-                        <span className="sm:hidden">Revise</span>
-                        <span className="hidden sm:inline">Request Revision</span>
+                        <span className="truncate">Revise</span>
                       </Button>
                       <Button
                         size="sm"
                         variant="destructive"
-                        className="flex-1"
+                        className="w-full"
                         disabled={!!reviewing}
                         onClick={() => handleReview(sub.submissionId, 'REJECT')}
                       >
                         {reviewing === sub.submissionId + 'REJECT' ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                        Reject
+                        <span className="truncate">Reject</span>
                       </Button>
                     </div>
                   </div>

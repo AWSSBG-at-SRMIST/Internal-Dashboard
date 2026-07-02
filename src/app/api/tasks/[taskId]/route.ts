@@ -49,12 +49,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
       if (active) collectiveLockedBy = { memberId: active.memberId, memberName: active.memberName };
     }
 
-    // Scope-gate canReview: a DIRECTOR can only review submissions within their domain,
-    // a MANAGER within their domain+subdomain, or explicitly delegated reviewers.
-    const canReview = isPresidium(user)
-      || (user.role === 'DIRECTOR' && (!taskResult.Item.domain || taskResult.Item.domain === user.domain))
-      || (user.role === 'MANAGER' && (!taskResult.Item.domain || (taskResult.Item.domain === user.domain && (!taskResult.Item.subdomain || taskResult.Item.subdomain === user.subdomain))))
-      || isDelegatedReviewer;
+    // Task creator and delegated reviewers always see all submissions.
+    // Presidium tasks are centralised — if the creator was presidium, any
+    // presidium member (SBG_LEADER or SECRETARY) can see all submissions too.
+    const creatorIsPresidium = taskResult.Item.createdByRole === 'SBG_LEADER' || taskResult.Item.createdByRole === 'SECRETARY';
+    const canReview = taskResult.Item.createdBy === user.memberId
+      || isDelegatedReviewer
+      || (isPresidium(user) && creatorIsPresidium);
     const visibleSubmissions = canReview ? submissions : mySubmissions;
     const canSubmit = taskResult.Item.status === 'OPEN'
       && !collectiveLockedBy
@@ -63,7 +64,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
     const canDelete = isPresidium(user) || taskResult.Item.createdBy === user.memberId;
     const canClose = canReview || taskResult.Item.createdBy === user.memberId;
     const canEdit = taskResult.Item.createdBy === user.memberId || canReview;
-    const creatorIsPresidium = taskResult.Item.createdByRole === 'SBG_LEADER' || taskResult.Item.createdByRole === 'SECRETARY';
     const canDelegate = isPresidium(user) && creatorIsPresidium;
 
     return NextResponse.json({
@@ -115,8 +115,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    const canReview = isPresidium(user) || user.role === 'DIRECTOR' || user.role === 'MANAGER' || isDelegatedReviewer;
     const isCreator = task.Item.createdBy === user.memberId;
+    const taskCreatorIsPresidium = task.Item.createdByRole === 'SBG_LEADER' || task.Item.createdByRole === 'SECRETARY';
+    const canReview = isCreator || isDelegatedReviewer || (isPresidium(user) && taskCreatorIsPresidium);
 
     // Mirrors GET's canClose (canReview || isCreator) — a reviewer who didn't
     // create the task must still be able to close it, not just see the button.
