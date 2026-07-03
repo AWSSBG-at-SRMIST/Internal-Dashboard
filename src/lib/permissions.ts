@@ -114,10 +114,16 @@ export function getTaskRelationship(
     domain?: Domain | null;
     subdomain?: Subdomain | null;
     createdBy: string;
+    createdByRole?: string | null;
   },
 ): 'HIDDEN' | 'VISIBLE_ONLY' | 'CAN_SUBMIT' {
   // Task creators can never submit to their own task
   if (task.createdBy === user.memberId) return 'VISIBLE_ONLY';
+
+  // Presidium tasks are centralised — both presidium members hold review authority,
+  // so neither may submit (they would be reviewing their own submission).
+  const creatorIsPresidium = task.createdByRole === 'SBG_LEADER' || task.createdByRole === 'SECRETARY';
+  if (isPresidium(user) && creatorIsPresidium) return 'VISIBLE_ONLY';
 
   if (isPresidium(user)) return 'CAN_SUBMIT';
 

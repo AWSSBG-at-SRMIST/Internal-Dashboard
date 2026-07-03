@@ -3,8 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { calculateRating, applyRating } from '@/lib/ratings';
-import { canReviewSubmission } from '@/lib/permissions';
-import type { Domain, Subdomain } from '@/types';
+import { isPresidium } from '@/lib/permissions';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   const user = await getCurrentUser();
@@ -38,18 +37,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
       return NextResponse.json({ error: 'Already reviewed' }, { status: 409 });
     }
 
-    if (!canReviewSubmission(user, {
-      memberId: submission.memberId,
-      domain: submission.domain as Domain,
-      subdomain: submission.subdomain as Subdomain,
-    })) {
+    // Mirror the same canReview logic as GET: creator, delegated reviewer,
+    // or presidium on a presidium-created task.
+    const delegatedReviewers = (task.delegatedReviewers || []) as Array<{ memberId: string }>;
+    const isDelegatedReviewer = delegatedReviewers.some(d => d.memberId === user.memberId);
+    const taskCreatorIsPresidium = task.createdByRole === 'SBG_LEADER' || task.createdByRole === 'SECRETARY';
+    const canReview = task.createdBy === user.memberId
+      || isDelegatedReviewer
+      || (isPresidium(user) && taskCreatorIsPresidium);
+
+    if (!canReview) {
       return NextResponse.json({ error: 'Not authorized to review this submission' }, { status: 403 });
+    }
+    // Reviewers cannot review their own submissions
+    if (submission.memberId === user.memberId) {
+      return NextResponse.json({ error: 'You cannot review your own submission' }, { status: 403 });
     }
 
     let ratingDelta = 0;
     let late = false;
     if (action === 'APPROVE') {
-      const result = calculateRating(submission.submittedAt, submission.deadline);
+      // Use task.deadline (current, possibly extended) not submission.deadline (captured at submit time)
+      const result = calculateRating(submission.submittedAt, task.deadline);
       ratingDelta = result.delta;
       late = result.late;
     }

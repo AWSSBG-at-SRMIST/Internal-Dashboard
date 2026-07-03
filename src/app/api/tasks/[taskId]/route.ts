@@ -59,12 +59,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
     const visibleSubmissions = canReview ? submissions : mySubmissions;
     const canSubmit = taskResult.Item.status === 'OPEN'
       && !collectiveLockedBy
+      && !isDelegatedReviewer
       && (!mySubmission || mySubmission.reviewStatus === 'REJECTED' || mySubmission.reviewStatus === 'REVISION_REQUESTED')
       && canSubmitTask(user, taskResult.Item as any);
     const canDelete = isPresidium(user) || taskResult.Item.createdBy === user.memberId;
     const canClose = canReview || taskResult.Item.createdBy === user.memberId;
     const canEdit = taskResult.Item.createdBy === user.memberId || canReview;
-    const canDelegate = isPresidium(user) && creatorIsPresidium;
+    // Presidium can delegate on any task; directors can delegate only on their own tasks.
+    const canDelegate = isPresidium(user) || (user.role === 'DIRECTOR' && taskResult.Item.createdBy === user.memberId);
+    // Tells the picker what members to show: 'ANY' for presidium, or a domain string for directors.
+    const delegateFilter: string = isPresidium(user) ? 'ANY' : (user.domain ?? 'ANY');
 
     return NextResponse.json({
       success: true,
@@ -78,6 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
         canClose,
         canEdit,
         canDelegate,
+        delegateFilter,
         collectiveLockedBy,
       },
     });
@@ -126,18 +131,38 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
     }
 
     if (delegatedReviewers !== undefined) {
-      if (!isPresidium(user)) {
-        return NextResponse.json({ error: 'Only Presidium can manage delegates' }, { status: 403 });
+      const isDirectorOwner = user.role === 'DIRECTOR' && isCreator;
+      if (!isPresidium(user) && !isDirectorOwner) {
+        return NextResponse.json({ error: 'Only Presidium or the task creator (Director) can manage delegates' }, { status: 403 });
       }
       if (!Array.isArray(delegatedReviewers) || delegatedReviewers.length > 2) {
         return NextResponse.json({ error: 'Maximum 2 delegates allowed' }, { status: 400 });
       }
+      // Validate each proposed delegate entry
+      const uniqueIds = new Set<string>();
       for (const d of delegatedReviewers) {
         if (!d.memberId || !d.memberName) {
           return NextResponse.json({ error: 'Invalid delegate entry' }, { status: 400 });
         }
         if (d.memberId === task.Item.createdBy) {
           return NextResponse.json({ error: 'Task creator cannot be a delegate' }, { status: 400 });
+        }
+        if (uniqueIds.has(d.memberId)) {
+          return NextResponse.json({ error: 'Duplicate delegate entries are not allowed' }, { status: 400 });
+        }
+        uniqueIds.add(d.memberId);
+      }
+      // Directors: verify all delegates belong to their domain
+      if (isDirectorOwner && !isPresidium(user)) {
+        const memberLookups = await Promise.all(
+          (delegatedReviewers as Array<{ memberId: string }>).map(d =>
+            db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId: d.memberId } }))
+          )
+        );
+        for (const lookup of memberLookups) {
+          if (!lookup.Item || lookup.Item.domain !== user.domain) {
+            return NextResponse.json({ error: 'Directors can only delegate to members within their domain' }, { status: 403 });
+          }
         }
       }
     }
@@ -182,9 +207,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       const newDelegates = (delegatedReviewers as Array<{ memberId: string; memberName: string }>)
         .filter(d => !existingDelegates.some(e => e.memberId === d.memberId));
       if (newDelegates.length > 0) {
-        const origin = req.headers.get('origin') || req.headers.get('x-forwarded-proto')
-          ? `${req.headers.get('x-forwarded-proto')}://${req.headers.get('host')}`
-          : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const proto = req.headers.get('x-forwarded-proto');
+        const host = req.headers.get('host');
+        const origin = (proto && host)
+          ? `${proto}://${host}`
+          : (req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000');
         const taskUrl = `${origin}/tasks/${taskId}`;
         await Promise.allSettled(
           newDelegates.map(async d => {

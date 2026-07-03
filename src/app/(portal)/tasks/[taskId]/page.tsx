@@ -33,6 +33,7 @@ interface TaskDetailData {
   canClose: boolean;
   canEdit: boolean;
   canDelegate: boolean;
+  delegateFilter: string; // 'ANY' for presidium, domain string for directors
   collectiveLockedBy: { memberId: string; memberName: string } | null;
 }
 
@@ -187,6 +188,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   }
 
   async function openDelegateModal() {
+    if (!data) return;
     setShowDelegateModal(true);
     setDelegateSearch('');
     setSelectedDelegate(null);
@@ -195,9 +197,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       const res = await fetch('/api/members');
       const d = await res.json();
       if (d.success) {
+        const ELIGIBLE_ROLES = ['DIRECTOR', 'MANAGER', 'ASSOCIATE'];
         setDelegateMembers(
           (d.data as any[])
-            .filter(m => m.isActive && m.role !== 'BUILDER')
+            .filter(m =>
+              m.isActive &&
+              ELIGIBLE_ROLES.includes(m.role) &&
+              // Directors see only their own domain; presidium see everyone
+              (delegateFilter === 'ANY' || m.domain === delegateFilter)
+            )
             .map(m => ({ memberId: m.memberId, memberName: m.name, role: m.role, domain: m.domain }))
         );
       }
@@ -225,6 +233,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
     if (!data || !selectedDelegate) return;
     const current = data.task.delegatedReviewers || [];
     if (current.length >= 2) return;
+    if (current.some(d => d.memberId === selectedDelegate.memberId)) return; // duplicate guard
     await updateDelegates([...current, { memberId: selectedDelegate.memberId, memberName: selectedDelegate.memberName }]);
     setShowDelegateModal(false);
     setSelectedDelegate(null);
@@ -252,7 +261,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   );
   if (!data) return null;
 
-  const { task, submissions, mySubmission, canReview, canSubmit, canDelete, canClose, canEdit, canDelegate, collectiveLockedBy } = data;
+  const { task, submissions, mySubmission, canReview, canSubmit, canDelete, canClose, canEdit, canDelegate, delegateFilter, collectiveLockedBy } = data;
   const overdue = isDeadlinePassed(task.deadline);
 
   return (
