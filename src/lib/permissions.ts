@@ -67,7 +67,12 @@ export function canCreateScope(
   subdomain?: Subdomain | null,
   assignedToId?: string | null,
 ): string | null {
-  if (scope === 'ORG_WIDE' || scope === 'ALL_DIRECTORS') {
+  if (scope === 'ORG_WIDE') {
+    if (isPresidium(actor)) return null;
+    if (actor.role === 'MANAGER' && actor.subdomain === 'HR & Admin') return null;
+    return 'Only Presidium can create this scope';
+  }
+  if (scope === 'ALL_DIRECTORS') {
     return isPresidium(actor) ? null : 'Only Presidium can create this scope';
   }
   if (scope === 'SINGLE_DIRECTOR') {

@@ -31,6 +31,9 @@ function getAvailableScopes(me: SessionUser): { value: TaskAssignmentScope; labe
     { value: 'SUBDOMAIN_LEADERSHIP', label: 'Subdomain Leadership',  description: 'Assign to the Manager + Associates of one subdomain' },
   ];
   if (me.role === 'MANAGER') return [
+    ...(me.subdomain === 'HR & Admin' ? [
+      { value: 'ORG_WIDE' as const, label: 'Org-wide', description: 'Assign to every member of the club' },
+    ] : []),
     { value: 'SUBDOMAIN_WIDE', label: 'Subdomain-wide', description: `Assign to everyone in ${me.subdomain}` },
     { value: 'INDIVIDUAL',     label: 'Individual',     description: 'Assign to one specific member in your subdomain' },
   ];

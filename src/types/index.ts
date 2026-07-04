@@ -56,7 +56,7 @@ export interface Member {
 // Assignment scope — who a task is assigned to.
 // Scopes are strictly role-gated (see permissions.ts canCreateScope).
 export type TaskAssignmentScope =
-  | 'ORG_WIDE'             // Presidium → entire club
+  | 'ORG_WIDE'             // Presidium, or HR & Admin Manager → entire club
   | 'ALL_DIRECTORS'        // Presidium → every Director across all domains
   | 'SINGLE_DIRECTOR'      // Presidium → one specific Director (assignedToId required)
   | 'DOMAIN_WIDE'          // Director  → all roles in their domain
