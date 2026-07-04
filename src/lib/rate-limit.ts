@@ -1,9 +1,5 @@
 import { NextRequest } from 'next/server';
-
-// In-memory fixed-window limiter. Good enough for a single-instance Node
-// deployment; resets on cold start. If this app ever runs across multiple
-// instances, swap the Map for a shared store (e.g. a DynamoDB counter table).
-const buckets = new Map<string, { count: number; resetAt: number }>();
+import { db, TABLE, UpdateCommand } from './dynamodb';
 
 export function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get('x-forwarded-for');
@@ -15,23 +11,34 @@ export function getClientIp(req: NextRequest): string {
   return req.headers.get('x-real-ip') || 'unknown';
 }
 
-/** Returns true if the request is allowed, false if it should be rejected (rate limited). */
-export function checkRateLimit(key: string, limit: number, windowSeconds: number): boolean {
-  const now = Date.now();
+/**
+ * Fixed-window limiter backed by a shared DynamoDB table (sbg-rate-limits,
+ * partition key `bucketKey`, TTL enabled on `expiresAt`) so the count is
+ * consistent across cold starts and multiple serverless instances — an
+ * in-memory Map only rate-limits a single process.
+ *
+ * Requires the sbg-rate-limits table to exist with TTL enabled on
+ * `expiresAt`; it is not created automatically.
+ *
+ * Returns true if the request is allowed, false if it should be rejected.
+ */
+export async function checkRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
+  const windowStart = Math.floor(Date.now() / 1000 / windowSeconds) * windowSeconds;
+  const bucketKey = `${key}:${windowStart}`;
+  const expiresAt = windowStart + windowSeconds + 60; // grace period before DynamoDB's TTL sweep
 
-  // Probabilistic prune (~1% of calls) to prevent unbounded Map growth on long-lived instances.
-  if (Math.random() < 0.01) {
-    for (const [k, v] of buckets) {
-      if (v.resetAt <= now) buckets.delete(k);
-    }
-  }
-
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+  try {
+    await db.send(new UpdateCommand({
+      TableName: TABLE.RATE_LIMITS,
+      Key: { bucketKey },
+      UpdateExpression: 'SET #c = if_not_exists(#c, :zero) + :one, expiresAt = :ttl',
+      ConditionExpression: 'attribute_not_exists(#c) OR #c < :limit',
+      ExpressionAttributeNames: { '#c': 'count' },
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1, ':limit': limit, ':ttl': expiresAt },
+    }));
     return true;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return false;
+    throw err;
   }
-  if (bucket.count >= limit) return false;
-  bucket.count++;
-  return true;
 }

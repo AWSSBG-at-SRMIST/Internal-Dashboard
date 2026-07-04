@@ -8,7 +8,7 @@ const SwaggerUI = dynamic(() => import('swagger-ui-react'), { ssr: false });
 export function SwaggerUIClient() {
   return (
     <div className="h-dvh overflow-y-auto" style={{ background: '#fff', color: '#3b4151' }}>
-      <SwaggerUI url="/openapi.json" />
+      <SwaggerUI url="/api/openapi" />
     </div>
   );
 }

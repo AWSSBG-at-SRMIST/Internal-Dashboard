@@ -9,6 +9,18 @@ export function canEditMembers(actor: SessionUser): boolean {
   return actor.subdomain === 'HR & Admin' && (actor.role === 'MANAGER' || actor.role === 'ASSOCIATE');
 }
 
+// Same privilege bar as canEditMembers — anyone who can edit member records
+// can also see their unstripped PII.
+export const canViewMemberPII = canEditMembers;
+
+const MEMBER_PII_FIELDS = ['phone', 'personalEmail', 'whatsapp', 'instagram', 'regNo'] as const;
+
+export function stripMemberPII<T extends Record<string, unknown>>(member: T): T {
+  const stripped = { ...member };
+  for (const f of MEMBER_PII_FIELDS) delete stripped[f];
+  return stripped;
+}
+
 export function canGenerateMoM(actor: SessionUser): boolean {
   if (isPresidium(actor)) return true;
   if (actor.role === 'DIRECTOR' || actor.role === 'MANAGER' || actor.role === 'ASSOCIATE') return true;

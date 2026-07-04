@@ -16,8 +16,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  // Only cache same-origin requests
-  if (url.origin !== location.origin) return;
+  // Only cache same-origin requests, and never API responses — those carry
+  // per-session, per-user data (PII, auth state) that must not persist in a
+  // shared cache across logins on the same device.
+  if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -27,4 +29,13 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request))
   );
+});
+
+// Let a logging-out client purge everything this SW has cached for the
+// session that just ended, so the next login on a shared device doesn't
+// inherit stale cached pages.
+self.addEventListener('message', e => {
+  if (e.data === 'CLEAR_CACHE') {
+    e.waitUntil(caches.delete(CACHE));
+  }
 });

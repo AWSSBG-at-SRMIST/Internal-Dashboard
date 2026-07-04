@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, invalidateSessionsForMember } from '@/lib/auth';
 import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium, canEditMembers, validateRoleScope } from '@/lib/permissions';
+import { isPresidium, canEditMembers, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const user = await getCurrentUser();
@@ -16,7 +16,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ memb
 
     const ratingResult = await db.send(new GetCommand({ TableName: TABLE.RATINGS, Key: { memberId } }));
 
-    return NextResponse.json({ success: true, data: { ...result.Item, rating: ratingResult.Item || null } });
+    // Only the member themselves or a privileged viewer gets unstripped PII.
+    const member = (user.memberId === memberId || canViewMemberPII(user))
+      ? result.Item
+      : stripMemberPII(result.Item);
+
+    return NextResponse.json({ success: true, data: { ...member, rating: ratingResult.Item || null } });
   } catch (error) {
     console.error('Get member error:', error);
     return NextResponse.json({ error: 'Failed to fetch member' }, { status: 500 });

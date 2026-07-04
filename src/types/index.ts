@@ -114,6 +114,10 @@ export interface Submission {
   reviewedAt: string | null;
   reviewFeedback: string | null;
   ratingAwarded: number | null;
+  // Whether the submission was late against task.deadline as it stood at
+  // review time — recorded so a later reversal (task deletion) doesn't have
+  // to recompute against a deadline that may have since been extended.
+  wasLate: boolean | null;
   deadline: string;
 }
 

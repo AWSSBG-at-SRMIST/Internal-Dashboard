@@ -1,4 +1,7 @@
-import { db, TABLE, UpdateCommand } from './dynamodb';
+import { db, TABLE, UpdateCommand, TransactWriteCommand } from './dynamodb';
+import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
+
+type TransactItems = NonNullable<TransactWriteCommandInput['TransactItems']>;
 
 // Flat star scale — priority does NOT affect the delta.
 // +2 early, +1 on-time, 0 late, -1 very late.
@@ -22,7 +25,8 @@ export function calculateRating(
 // member's star total. Stars are the single source of truth on sbg-members;
 // sbg-ratings only tracks the submission-count buckets.
 // Uses if_not_exists throughout so the record is created on first call
-// without a separate read-then-write.
+// without a separate read-then-write. Both table writes go through a single
+// TransactWriteItems call so they can never partially apply.
 export async function applyRating(
   memberId: string,
   ratingDelta: number,
@@ -30,34 +34,43 @@ export async function applyRating(
   late: boolean = false,
 ): Promise<void> {
   const isLateApproval = action === 'APPROVE' && late;
+  const ts = new Date().toISOString();
 
-  await db.send(new UpdateCommand({
-    TableName: TABLE.RATINGS,
-    Key: { memberId },
-    UpdateExpression: `SET
-      approvedCount      = if_not_exists(approvedCount, :zero)      + :appInc,
-      lateApprovedCount  = if_not_exists(lateApprovedCount, :zero)  + :lateInc,
-      rejectedCount      = if_not_exists(rejectedCount, :zero)      + :rejInc,
-      pendingCount       = if_not_exists(pendingCount, :one)        - :one,
-      lastUpdated        = :ts`,
-    ExpressionAttributeValues: {
-      ':zero':    0,
-      ':one':     1,
-      ':appInc':  action === 'APPROVE' && !isLateApproval ? 1 : 0,
-      ':lateInc': isLateApproval ? 1 : 0,
-      ':rejInc':  action === 'REJECT' ? 1 : 0,
-      ':ts':      new Date().toISOString(),
+  const transactItems: TransactItems = [
+    {
+      Update: {
+        TableName: TABLE.RATINGS,
+        Key: { memberId },
+        UpdateExpression: `SET
+          approvedCount      = if_not_exists(approvedCount, :zero)      + :appInc,
+          lateApprovedCount  = if_not_exists(lateApprovedCount, :zero)  + :lateInc,
+          rejectedCount      = if_not_exists(rejectedCount, :zero)      + :rejInc,
+          pendingCount       = if_not_exists(pendingCount, :one)        - :one,
+          lastUpdated        = :ts`,
+        ExpressionAttributeValues: {
+          ':zero':    0,
+          ':one':     1,
+          ':appInc':  action === 'APPROVE' && !isLateApproval ? 1 : 0,
+          ':lateInc': isLateApproval ? 1 : 0,
+          ':rejInc':  action === 'REJECT' ? 1 : 0,
+          ':ts':      ts,
+        },
+      },
     },
-  }));
+  ];
 
   if (ratingDelta !== 0) {
-    await db.send(new UpdateCommand({
-      TableName: TABLE.MEMBERS,
-      Key: { memberId },
-      UpdateExpression: 'SET totalStars = totalStars + :delta',
-      ExpressionAttributeValues: { ':delta': ratingDelta },
-    }));
+    transactItems.push({
+      Update: {
+        TableName: TABLE.MEMBERS,
+        Key: { memberId },
+        UpdateExpression: 'SET totalStars = totalStars + :delta',
+        ExpressionAttributeValues: { ':delta': ratingDelta },
+      },
+    });
   }
+
+  await db.send(new TransactWriteCommand({ TransactItems: transactItems }));
 }
 
 // Called from the submit route when a new submission is created.
@@ -78,10 +91,9 @@ export async function reverseSubmissionRating(submission: {
   memberId: string;
   reviewStatus: string;
   ratingAwarded: number | null;
-  submittedAt: string;
-  deadline: string;
+  wasLate: boolean | null;
 }): Promise<void> {
-  const { memberId, reviewStatus, ratingAwarded, submittedAt, deadline } = submission;
+  const { memberId, reviewStatus, ratingAwarded, wasLate } = submission;
   const ts = new Date().toISOString();
 
   if (reviewStatus === 'PENDING') {
@@ -98,34 +110,44 @@ export async function reverseSubmissionRating(submission: {
   if (reviewStatus === 'REVISION_REQUESTED') return;
 
   // APPROVED or REJECTED — pendingCount is already net-zero (submit +1, review -1).
-  // Reverse the approval/rejection counter and stars.
-  const late = (new Date(submittedAt).getTime() - new Date(deadline).getTime()) / (1000 * 60 * 60) > 0;
+  // Reverse the approval/rejection counter and stars. Use the wasLate flag
+  // recorded at review time (against task.deadline as it stood then), not a
+  // recomputation — the task's deadline may have been extended since.
+  const late = wasLate === true;
 
-  await db.send(new UpdateCommand({
-    TableName: TABLE.RATINGS,
-    Key: { memberId },
-    UpdateExpression: `SET
-      approvedCount     = if_not_exists(approvedCount, :zero)     - :appDec,
-      lateApprovedCount = if_not_exists(lateApprovedCount, :zero) - :lateDec,
-      rejectedCount     = if_not_exists(rejectedCount, :zero)     - :rejDec,
-      lastUpdated       = :ts`,
-    ExpressionAttributeValues: {
-      ':zero':    0,
-      ':appDec':  reviewStatus === 'APPROVED' && !late ? 1 : 0,
-      ':lateDec': reviewStatus === 'APPROVED' && late  ? 1 : 0,
-      ':rejDec':  reviewStatus === 'REJECTED'          ? 1 : 0,
-      ':ts':      ts,
+  const transactItems: TransactItems = [
+    {
+      Update: {
+        TableName: TABLE.RATINGS,
+        Key: { memberId },
+        UpdateExpression: `SET
+          approvedCount     = if_not_exists(approvedCount, :zero)     - :appDec,
+          lateApprovedCount = if_not_exists(lateApprovedCount, :zero) - :lateDec,
+          rejectedCount     = if_not_exists(rejectedCount, :zero)     - :rejDec,
+          lastUpdated       = :ts`,
+        ExpressionAttributeValues: {
+          ':zero':    0,
+          ':appDec':  reviewStatus === 'APPROVED' && !late ? 1 : 0,
+          ':lateDec': reviewStatus === 'APPROVED' && late  ? 1 : 0,
+          ':rejDec':  reviewStatus === 'REJECTED'          ? 1 : 0,
+          ':ts':      ts,
+        },
+      },
     },
-  }));
+  ];
 
   if (ratingAwarded !== null && ratingAwarded !== 0) {
-    await db.send(new UpdateCommand({
-      TableName: TABLE.MEMBERS,
-      Key: { memberId },
-      UpdateExpression: 'SET totalStars = totalStars - :delta',
-      ExpressionAttributeValues: { ':delta': ratingAwarded },
-    }));
+    transactItems.push({
+      Update: {
+        TableName: TABLE.MEMBERS,
+        Key: { memberId },
+        UpdateExpression: 'SET totalStars = totalStars - :delta',
+        ExpressionAttributeValues: { ':delta': ratingAwarded },
+      },
+    });
   }
+
+  await db.send(new TransactWriteCommand({ TransactItems: transactItems }));
 }
 
 export function getRatingLabel(stars: number): string {

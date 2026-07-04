@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     // Per-IP throttle on top of the per-email attempt lock in verifyOTP() —
     // stops an attacker from parallelizing guesses across many email addresses.
-    if (!checkRateLimit(`verify-otp:${getClientIp(req)}`, 20, 10 * 60)) {
+    if (!(await checkRateLimit(`verify-otp:${getClientIp(req)}`, 20, 10 * 60))) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 

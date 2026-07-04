@@ -82,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     await db.send(new UpdateCommand({
       TableName: TABLE.SUBMISSIONS,
       Key: { submissionId },
-      UpdateExpression: 'SET reviewStatus = :s, reviewedBy = :rb, reviewedByName = :rbn, reviewedAt = :ra, ratingAwarded = :r, reviewFeedback = :fb',
+      UpdateExpression: 'SET reviewStatus = :s, reviewedBy = :rb, reviewedByName = :rbn, reviewedAt = :ra, ratingAwarded = :r, reviewFeedback = :fb, wasLate = :late',
       ConditionExpression: 'reviewStatus = :pending',
       ExpressionAttributeValues: {
         ':s':       newStatus,
@@ -91,6 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
         ':ra':      new Date().toISOString(),
         ':r':       action === 'APPROVE' ? ratingDelta : null,
         ':fb':      trimmedFeedback,
+        ':late':    action === 'APPROVE' ? late : null,
         ':pending': 'PENDING',
       },
     }));

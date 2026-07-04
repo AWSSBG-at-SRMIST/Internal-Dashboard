@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     // Per-IP throttle to stop an attacker from sweeping the directory for
     // valid/active emails or exhausting the Gmail send quota.
-    if (!checkRateLimit(`send-otp:${getClientIp(req)}`, 10, 10 * 60)) {
+    if (!(await checkRateLimit(`send-otp:${getClientIp(req)}`, 10, 10 * 60))) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 

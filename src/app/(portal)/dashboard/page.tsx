@@ -4,30 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckSquare, Users, Link2, TrendingUp, Clock, Star } from 'lucide-react';
 import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getAssignmentScopeLabel, getGreeting, timeAgo, formatRole } from '@/lib/utils';
-import { isTaskVisible } from '@/lib/permissions';
-import type { SessionUser } from '@/types';
+import { isTaskVisible, getTaskRelationship } from '@/lib/permissions';
+import type { SessionUser, Domain, Subdomain } from '@/types';
 import Link from 'next/link';
 
-// A task is "mine" if it's addressed to me or a group I personally belong to
-// (i.e., I should submit for it). Team tasks are ones I oversee but don't submit.
+// A task is "mine" if I can actually submit to it — delegates to the same
+// single source of truth used everywhere else (getTaskRelationship), so the
+// dashboard can't drift out of sync with the real permission model. Team
+// tasks are ones I oversee but don't submit.
 function isMyTask(
   user: SessionUser,
-  task: { assignmentType: string; assignedToId?: string | null; domain?: string | null; subdomain?: string | null; createdBy: string },
+  task: { assignmentType: string; assignedToId?: string | null; domain?: Domain | null; subdomain?: Subdomain | null; createdBy: string; createdByRole?: string | null },
 ): boolean {
-  const s = task.assignmentType;
-  if (s === 'ORG_WIDE' || s === 'GENERAL') return true;
-  if (s === 'ALL_DIRECTORS') return user.role === 'DIRECTOR';
-  if (s === 'SINGLE_DIRECTOR' || s === 'INDIVIDUAL') return task.assignedToId === user.memberId;
-  if (s === 'DOMAIN_WIDE') return user.domain === task.domain;
-  if (s === 'SUBDOMAIN_WIDE') return user.domain === task.domain && user.subdomain === task.subdomain;
-  if (s === 'SUBDOMAIN_LEADERSHIP') {
-    return user.domain === task.domain && user.subdomain === task.subdomain
-      && (user.role === 'MANAGER' || user.role === 'ASSOCIATE');
-  }
-  if (s === 'BUILDERS_ONLY') return user.domain === task.domain && user.subdomain === task.subdomain && user.role === 'BUILDER';
-  if (s === 'PERSONAL') return task.assignedToId === user.memberId;
-  if (s === 'BROADCAST') return !task.domain;
-  return false;
+  return getTaskRelationship(user, task) === 'CAN_SUBMIT';
 }
 
 async function getDashboardStats(user: SessionUser) {

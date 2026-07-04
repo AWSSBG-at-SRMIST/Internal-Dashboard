@@ -89,9 +89,18 @@ export async function GET(req: NextRequest) {
             ':open': 'OPEN',
             ':ts': new Date().toISOString(),
           },
-        })).catch((err: any) => {
-          // Already closed by lazy mechanism — that's fine, still mark penalty
+        })).catch(async (err: any) => {
           if (err.name !== 'ConditionalCheckFailedException') throw err;
+          // Already closed by the lazy mechanism in between our Query and this
+          // Update — the status SET above never landed, so the penalty marker
+          // must still be stamped here or this task keeps re-qualifying and
+          // gets re-penalized on every future cron run.
+          await db.send(new UpdateCommand({
+            TableName: TABLE.TASKS,
+            Key: { taskId: task.taskId },
+            UpdateExpression: 'SET noSubmissionPenaltyAt = :ts',
+            ExpressionAttributeValues: { ':ts': new Date().toISOString() },
+          }));
         });
         tasksClosed++;
       } else {

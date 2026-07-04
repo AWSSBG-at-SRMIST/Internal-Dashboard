@@ -105,6 +105,9 @@ export function Sidebar({ user, children }: SidebarProps) {
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
+    // Purge the SW cache so a subsequent login on the same (possibly shared)
+    // device doesn't get served this session's cached pages/state.
+    navigator.serviceWorker?.controller?.postMessage('CLEAR_CACHE');
     window.location.href = '/login';
   }
 

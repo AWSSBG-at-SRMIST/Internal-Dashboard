@@ -43,15 +43,23 @@ export async function verifyOTP(email: string, otp: string): Promise<'valid' | '
   const now = Math.floor(Date.now() / 1000);
   if (result.Item.expiresAt < now) return 'expired';
   if ((result.Item.attempts || 0) >= OTP_MAX_ATTEMPTS) return 'locked';
-  if (result.Item.otp !== hashOTP(otp)) {
+
+  // Check-and-increment the attempt counter atomically so concurrent guesses
+  // can't all read the same pre-increment count and bypass the lockout.
+  try {
     await db.send(new UpdateCommand({
       TableName: TABLE.OTPS,
       Key: { email },
       UpdateExpression: 'SET attempts = if_not_exists(attempts, :zero) + :one',
-      ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+      ConditionExpression: 'attribute_not_exists(attempts) OR attempts < :max',
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1, ':max': OTP_MAX_ATTEMPTS },
     }));
-    return 'invalid';
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return 'locked';
+    throw err;
   }
+
+  if (result.Item.otp !== hashOTP(otp)) return 'invalid';
   return 'valid';
 }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, ScanCommand, PutCommand, QueryCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium, validateRoleScope } from '@/lib/permissions';
+import { isPresidium, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
 import { randomUUID } from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -47,16 +47,8 @@ export async function GET(req: NextRequest) {
     members.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
 
     // Strip PII from the list response for non-privileged users.
-    // Privileged = Presidium or HR & Admin Manager/Associate.
-    const privileged = isPresidium(user) ||
-      (user.subdomain === 'HR & Admin' && (user.role === 'MANAGER' || user.role === 'ASSOCIATE'));
-    if (!privileged) {
-      const PII_FIELDS = ['phone', 'personalEmail', 'whatsapp', 'instagram', 'regNo'];
-      members = members.map((m: any) => {
-        const stripped = { ...m };
-        for (const f of PII_FIELDS) delete stripped[f];
-        return stripped;
-      });
+    if (!canViewMemberPII(user)) {
+      members = members.map((m: any) => stripMemberPII(m));
     }
 
     return NextResponse.json({ success: true, data: members });
