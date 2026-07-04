@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, TABLE, QueryCommand, ScanCommand, UpdateCommand } from '@/lib/dynamodb';
-import { logAction } from '@/lib/audit';
-import { getEligibleMembers } from '@/lib/tasks';
-import type { SessionUser } from '@/types';
+import { db, TABLE, QueryCommand } from '@/lib/dynamodb';
+import { closeWithNoSubmissionPenalty } from '@/lib/tasks';
 import { timingSafeEqual } from 'crypto';
 
 export const maxDuration = 60;
-
-const SYSTEM_ACTOR: SessionUser = {
-  memberId: 'SYSTEM_CRON', name: 'System (Auto-Close Cron)', email: 'system@internal',
-  role: 'SBG_LEADER', domain: null, subdomain: null,
-};
-
-const NO_SUBMISSION_PENALTY = -2;
 
 function safeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -37,8 +28,8 @@ export async function GET(req: NextRequest) {
     const cutoff = new Date(now - 24 * 60 * 60 * 1000).toISOString(); // 24h ago
 
     // Query both OPEN and CLOSED tasks — tasks closed lazily (by autoCloseIfExpired)
-    // still need the penalty applied if they had 0 submissions at close time.
-    const [openResult, closedResult, membersResult] = await Promise.all([
+    // still need the penalty pass if it hasn't been claimed yet.
+    const [openResult, closedResult] = await Promise.all([
       db.send(new QueryCommand({
         TableName: TABLE.TASKS,
         IndexName: 'StatusCreatedIndex',
@@ -53,86 +44,30 @@ export async function GET(req: NextRequest) {
         ExpressionAttributeNames: { '#s': 'status' },
         ExpressionAttributeValues: { ':closed': 'CLOSED' },
       })),
-      db.send(new ScanCommand({
-        TableName: TABLE.MEMBERS,
-        ProjectionExpression: 'memberId, #n, #d, subdomain, #r, isActive',
-        ExpressionAttributeNames: { '#n': 'name', '#d': 'domain', '#r': 'role' },
-      })),
     ]);
 
     const allTasks = [...(openResult.Items || []), ...(closedResult.Items || [])];
-    const activeMembers = (membersResult.Items || []).filter((m: any) => m.isActive !== false);
 
-    // Tasks that qualify: 0 submissions, deadline passed >24h ago, penalty not yet applied
+    // Tasks that qualify for the grace-expiry penalty pass: deadline passed >24h ago,
+    // penalty not yet claimed, and either zero submissions (any mode) or a multi-assignee
+    // Individual task (which may have partial submissions still needing the pass to
+    // penalise whoever hasn't submitted).
     const qualifying = allTasks.filter((t: any) =>
-      (t.totalSubmissions ?? 0) === 0 &&
+      !t.noSubmissionPenaltyAt &&
       t.deadline < cutoff &&
-      !t.noSubmissionPenaltyAt
+      ((t.totalSubmissions ?? 0) === 0 || (t.submissionMode === 'INDIVIDUAL' && !t.assignedToId))
     );
 
     let tasksClosed = 0;
     let penaltiesApplied = 0;
 
     for (const task of qualifying) {
-      const eligible = getEligibleMembers(task, activeMembers);
-
-      // Close the task if still OPEN
-      if (task.status === 'OPEN') {
-        await db.send(new UpdateCommand({
-          TableName: TABLE.TASKS,
-          Key: { taskId: task.taskId },
-          UpdateExpression: 'SET #s = :closed, noSubmissionPenaltyAt = :ts',
-          ConditionExpression: '#s = :open',
-          ExpressionAttributeNames: { '#s': 'status' },
-          ExpressionAttributeValues: {
-            ':closed': 'CLOSED',
-            ':open': 'OPEN',
-            ':ts': new Date().toISOString(),
-          },
-        })).catch(async (err: any) => {
-          if (err.name !== 'ConditionalCheckFailedException') throw err;
-          // Already closed by the lazy mechanism in between our Query and this
-          // Update — the status SET above never landed, so the penalty marker
-          // must still be stamped here or this task keeps re-qualifying and
-          // gets re-penalized on every future cron run.
-          await db.send(new UpdateCommand({
-            TableName: TABLE.TASKS,
-            Key: { taskId: task.taskId },
-            UpdateExpression: 'SET noSubmissionPenaltyAt = :ts',
-            ExpressionAttributeValues: { ':ts': new Date().toISOString() },
-          }));
-        });
-        tasksClosed++;
-      } else {
-        // Already CLOSED — just stamp the penalty marker
-        await db.send(new UpdateCommand({
-          TableName: TABLE.TASKS,
-          Key: { taskId: task.taskId },
-          UpdateExpression: 'SET noSubmissionPenaltyAt = :ts',
-          ExpressionAttributeValues: { ':ts': new Date().toISOString() },
-        }));
+      const wasOpen = task.status === 'OPEN';
+      const result = await closeWithNoSubmissionPenalty(task as any);
+      if (result.applied) {
+        if (wasOpen) tasksClosed++;
+        penaltiesApplied += result.penalisedCount;
       }
-
-      // Apply -2 to every eligible member
-      await Promise.allSettled(
-        eligible.map((m: any) =>
-          db.send(new UpdateCommand({
-            TableName: TABLE.MEMBERS,
-            Key: { memberId: m.memberId },
-            UpdateExpression: 'SET totalStars = totalStars + :delta',
-            ExpressionAttributeValues: { ':delta': NO_SUBMISSION_PENALTY },
-          }))
-        )
-      );
-      penaltiesApplied += eligible.length;
-
-      await logAction(
-        SYSTEM_ACTOR,
-        'AUTO_CLOSE_TASK',
-        'TASK',
-        task.taskId,
-        `Auto-closed "${task.title}" — no submissions after 24h past deadline. ${eligible.length} member(s) penalised ${NO_SUBMISSION_PENALTY} stars.`
-      );
     }
 
     return NextResponse.json({

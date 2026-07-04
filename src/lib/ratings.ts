@@ -4,7 +4,8 @@ import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 type TransactItems = NonNullable<TransactWriteCommandInput['TransactItems']>;
 
 // Flat star scale — priority does NOT affect the delta.
-// +2 early, +1 on-time, 0 late, -1 very late.
+// +2 early, +1 on-time, -1 late (within the 24h grace window; submissions past grace
+// aren't accepted at all since the task auto-closes at that point).
 export function calculateRating(
   submittedAt: string,
   deadline: string,
@@ -13,10 +14,9 @@ export function calculateRating(
   const late = diffHours > 0;
 
   let delta: number;
-  if (diffHours < -24) delta = 2;      // >24h before deadline
+  if (diffHours < -24) delta = 2;  // >24h before deadline
   else if (diffHours <= 0) delta = 1;  // within last 24h before deadline
-  else if (diffHours <= 24) delta = 0; // within 24h after deadline
-  else delta = -1;                      // more than 24h after deadline
+  else delta = -1;  // late — within the 24h grace window after the deadline
 
   return { delta, late };
 }
@@ -158,6 +158,5 @@ export function getSubmissionTimingLabel(submittedAt: string, deadline: string):
   const diffHours = (new Date(submittedAt).getTime() - new Date(deadline).getTime()) / (1000 * 60 * 60);
   if (diffHours < -24) return 'Early (>24h before)';
   if (diffHours <= 0)  return 'On time (<24h before)';
-  if (diffHours <= 24) return 'Late (<24h after)';
-  return 'Very late (>24h after)';
+  return 'Late (within grace period)';
 }
