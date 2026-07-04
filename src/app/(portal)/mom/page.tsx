@@ -101,20 +101,35 @@ export default function MoMPage() {
     setAttendees(a => a.filter(x => x.name !== name));
   }
 
+  function normalizeName(s: string) {
+    return s.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function findMemberByName(raw: string): Member | null {
+    const n = normalizeName(raw);
+    // exact match first
+    const exact = members.find(m => normalizeName(m.name) === n);
+    if (exact) return exact;
+    // partial: pasted name starts-with or is contained in DB name (handles truncation/initials)
+    return members.find(m => {
+      const d = normalizeName(m.name);
+      return d.startsWith(n) || n.startsWith(d);
+    }) ?? null;
+  }
+
   function importPasted() {
     const lines = pasteText.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
-    const byNameLower = new Map(members.map(m => [m.name.toLowerCase(), m]));
     let added = 0, unmatched = 0;
     setAttendees(prev => {
       const next = [...prev];
-      const seen = new Set(next.map(a => a.name.toLowerCase()));
+      const seen = new Set(next.map(a => normalizeName(a.name)));
       for (const line of lines) {
-        const cleaned = line.replace(/\(.*?\)/g, '').trim();
-        if (!cleaned || seen.has(cleaned.toLowerCase())) continue;
-        const match = byNameLower.get(cleaned.toLowerCase());
-        next.push({ name: cleaned, role: match ? formatRole(match.role, match.domain) : '' });
-        seen.add(cleaned.toLowerCase());
+        const cleaned = line.replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
+        if (!cleaned || seen.has(normalizeName(cleaned))) continue;
+        const match = findMemberByName(cleaned);
+        next.push({ name: match ? match.name : cleaned, role: match ? formatRole(match.role, match.domain) : '' });
+        seen.add(normalizeName(match ? match.name : cleaned));
         added++;
         if (!match) unmatched++;
       }
@@ -122,7 +137,8 @@ export default function MoMPage() {
     });
     setPasteText('');
     setShowPaste(false);
-    toast.success(`Imported ${added} attendee${added === 1 ? '' : 's'}${unmatched ? ` (${unmatched} unmatched, role left blank)` : ''}`);
+    if (added === 0) { toast.error('No new names found to import'); return; }
+    toast.success(`Imported ${added} attendee${added === 1 ? '' : 's'}${unmatched ? ` — ${unmatched} not found in members list (role left blank)` : ''}`);
   }
 
   function buildTimeRange(): string | null {
@@ -372,7 +388,19 @@ export default function MoMPage() {
             </div>
             <div className="space-y-2">
               <Label>Reviewed By</Label>
-              <Input placeholder="Full Name - Role (optional)" value={form.reviewedBy} onChange={e => setForm(f => ({ ...f, reviewedBy: e.target.value }))} />
+              <Select
+                value={form.reviewedBy}
+                onValueChange={v => setForm(f => ({ ...f, reviewedBy: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a member (optional)" /></SelectTrigger>
+                <SelectContent>
+                  {members.filter(m => m.isActive).map(m => (
+                    <SelectItem key={m.memberId} value={`${m.name} - ${formatRole(m.role, m.domain)}`}>
+                      {m.name} ({formatRole(m.role, m.domain)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
