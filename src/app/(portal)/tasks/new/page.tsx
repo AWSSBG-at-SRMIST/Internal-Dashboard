@@ -38,6 +38,9 @@ function getAvailableScopes(me: SessionUser): { value: TaskAssignmentScope; labe
     { value: 'INDIVIDUAL',     label: 'Individual',     description: 'Assign to one specific member in your subdomain' },
   ];
   if (me.role === 'ASSOCIATE') return [
+    ...(me.subdomain === 'HR & Admin' ? [
+      { value: 'ORG_WIDE' as const, label: 'Org-wide', description: 'Assign to every member of the club' },
+    ] : []),
     { value: 'BUILDERS_ONLY', label: 'Builders Only', description: `Assign to all Builders in ${me.subdomain}` },
   ];
   return [];

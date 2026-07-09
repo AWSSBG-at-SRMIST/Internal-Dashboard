@@ -38,13 +38,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     }
 
     // Mirror the same canReview logic as GET: creator, delegated reviewer,
-    // or presidium on a presidium-created task.
+    // or presidium on a presidium-created or org-wide task.
     const delegatedReviewers = (task.delegatedReviewers || []) as Array<{ memberId: string }>;
     const isDelegatedReviewer = delegatedReviewers.some(d => d.memberId === user.memberId);
     const taskCreatorIsPresidium = task.createdByRole === 'SBG_LEADER' || task.createdByRole === 'SECRETARY';
+    const isOrgWide = task.assignmentType === 'ORG_WIDE';
     const canReview = task.createdBy === user.memberId
       || isDelegatedReviewer
-      || (isPresidium(user) && taskCreatorIsPresidium);
+      || (isPresidium(user) && (taskCreatorIsPresidium || isOrgWide));
 
     if (!canReview) {
       return NextResponse.json({ error: 'Not authorized to review this submission' }, { status: 403 });

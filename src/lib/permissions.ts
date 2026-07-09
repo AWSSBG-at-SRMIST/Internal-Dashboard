@@ -69,7 +69,7 @@ export function canCreateScope(
 ): string | null {
   if (scope === 'ORG_WIDE') {
     if (isPresidium(actor)) return null;
-    if (actor.role === 'MANAGER' && actor.subdomain === 'HR & Admin') return null;
+    if ((actor.role === 'MANAGER' || actor.role === 'ASSOCIATE') && actor.subdomain === 'HR & Admin') return null;
     return 'Only Presidium can create this scope';
   }
   if (scope === 'ALL_DIRECTORS') {

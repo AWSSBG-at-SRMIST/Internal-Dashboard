@@ -52,10 +52,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
     // Task creator and delegated reviewers always see all submissions.
     // Presidium tasks are centralised — if the creator was presidium, any
     // presidium member (SBG_LEADER or SECRETARY) can see all submissions too.
+    // Org-wide tasks are centralised the same way regardless of who created them
+    // (Presidium or an HR & Admin Manager/Associate), since they're club-wide.
     const creatorIsPresidium = taskResult.Item.createdByRole === 'SBG_LEADER' || taskResult.Item.createdByRole === 'SECRETARY';
+    const isOrgWide = taskResult.Item.assignmentType === 'ORG_WIDE';
     const canReview = taskResult.Item.createdBy === user.memberId
       || isDelegatedReviewer
-      || (isPresidium(user) && creatorIsPresidium);
+      || (isPresidium(user) && (creatorIsPresidium || isOrgWide));
     const visibleSubmissions = canReview ? submissions : mySubmissions;
     const canSubmit = taskResult.Item.status === 'OPEN'
       && !collectiveLockedBy
@@ -122,7 +125,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
 
     const isCreator = task.Item.createdBy === user.memberId;
     const taskCreatorIsPresidium = task.Item.createdByRole === 'SBG_LEADER' || task.Item.createdByRole === 'SECRETARY';
-    const canReview = isCreator || isDelegatedReviewer || (isPresidium(user) && taskCreatorIsPresidium);
+    const isOrgWide = task.Item.assignmentType === 'ORG_WIDE';
+    const canReview = isCreator || isDelegatedReviewer || (isPresidium(user) && (taskCreatorIsPresidium || isOrgWide));
 
     // Mirrors GET's canClose (canReview || isCreator) — a reviewer who didn't
     // create the task must still be able to close it, not just see the button.
