@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Pagination } from '@/components/ui/pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { getStarColor, formatRole } from '@/lib/utils';
+import { formatRole } from '@/lib/utils';
 import { DOMAIN_SUBDOMAINS, ROLE_HIERARCHY } from '@/types';
 import type { Domain } from '@/types';
 import Link from 'next/link';
@@ -14,8 +14,8 @@ import type { Member } from '@/types';
 
 const PAGE_SIZE = 10;
 
-function MemberMobileCard({ member, hideDomain, hideStars, hideSubdomain, delay }: {
-  member: Member; hideDomain?: boolean; hideStars?: boolean; hideSubdomain?: boolean; delay: number;
+function MemberMobileCard({ member, hideDomain, hideSubdomain, delay }: {
+  member: Member; hideDomain?: boolean; hideSubdomain?: boolean; delay: number;
 }) {
   return (
     <Link
@@ -29,11 +29,6 @@ function MemberMobileCard({ member, hideDomain, hideStars, hideSubdomain, delay 
           <p className="text-xs text-[#888] truncate font-mono">{member.officialEmail}</p>
           {member.clubId && <p className="text-xs text-[#f0f0f0] font-mono">{member.clubId}</p>}
         </div>
-        {!hideStars && (
-          <span className={`text-sm font-bold flex-shrink-0 font-mono ${getStarColor(member.totalStars)}`}>
-            {member.totalStars > 0 ? '+' : ''}{member.totalStars}⭐
-          </span>
-        )}
       </div>
       <div className="flex flex-wrap items-center gap-2 mt-2">
         <span className="text-xs text-[#f0f0f0] font-mono uppercase">{formatRole(member.role, member.domain)}</span>
@@ -44,7 +39,7 @@ function MemberMobileCard({ member, hideDomain, hideStars, hideSubdomain, delay 
   );
 }
 
-function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { members: Member[]; hideDomain?: boolean; hideStars?: boolean; hideSubdomain?: boolean }) {
+function MemberTable({ members, hideDomain, hideSubdomain }: { members: Member[]; hideDomain?: boolean; hideSubdomain?: boolean }) {
   const { page, setPage, totalPages, paginatedItems } = usePagination(members, PAGE_SIZE);
 
   return (
@@ -56,7 +51,6 @@ function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { member
             key={member.memberId}
             member={member}
             hideDomain={hideDomain}
-            hideStars={hideStars}
             hideSubdomain={hideSubdomain}
             delay={Math.min(idx, 10) * 30}
           />
@@ -73,7 +67,6 @@ function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { member
             <th className="table-header text-left hidden md:table-cell">Role</th>
             {!hideDomain && <th className="table-header text-left hidden lg:table-cell">Domain</th>}
             {!hideSubdomain && <th className="table-header text-left hidden lg:table-cell">Sub-Domain</th>}
-            {!hideStars && <th className="table-header text-right hidden sm:table-cell">Stars</th>}
             <th className="table-header text-left hidden lg:table-cell">Club ID</th>
             <th className="table-header text-center">Profile</th>
           </tr>
@@ -100,13 +93,6 @@ function MemberTable({ members, hideDomain, hideStars, hideSubdomain }: { member
               {!hideSubdomain && (
                 <td className="px-4 py-3 hidden lg:table-cell">
                   <span className="text-xs text-[#f0f0f0] font-mono">{member.subdomain || '—'}</span>
-                </td>
-              )}
-              {!hideStars && (
-                <td className="px-4 py-3 text-right hidden sm:table-cell">
-                  <span className={`text-sm font-bold font-mono ${getStarColor(member.totalStars)}`}>
-                    {member.totalStars > 0 ? '+' : ''}{member.totalStars}⭐
-                  </span>
                 </td>
               )}
               <td className="px-4 py-3 text-xs text-[#f0f0f0] hidden lg:table-cell font-mono">{member.clubId}</td>
@@ -213,7 +199,7 @@ export default function MembersClient({ initialMembers }: { initialMembers: Memb
           {presidium.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-bold text-[#666] uppercase tracking-widest border-l-2 border-[#FF9900] pl-3">Presidium</h2>
-              <MemberTable members={presidium} hideDomain hideStars hideSubdomain />
+              <MemberTable members={presidium} hideDomain hideSubdomain />
             </div>
           )}
 

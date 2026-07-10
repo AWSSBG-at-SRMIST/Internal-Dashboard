@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, ScanCommand, QueryCommand } from '@/lib/dynamodb';
+import { isPresidium } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -39,9 +40,14 @@ export async function GET(req: NextRequest) {
 
     const ratingsMap = new Map(ratings.map((r: any) => [r.memberId, r]));
 
+    // Director stars are private to Presidium and to Directors themselves (peer
+    // visibility) — Managers/Associates/Builders never see a Director's rating.
+    const canSeeDirectors = isPresidium(user) || user.role === 'DIRECTOR';
+
     const leaderboard = members
       .filter((m: any) => m.isActive)
       .filter((m: any) => m.role !== 'SBG_LEADER' && m.role !== 'SECRETARY') // Presidium doesn't participate in the star/rating system
+      .filter((m: any) => canSeeDirectors || m.role !== 'DIRECTOR')
       .filter((m: any) => !domain || m.domain === domain)
       .filter((m: any) => !subdomain || m.subdomain === subdomain)
       .map((m: any) => {

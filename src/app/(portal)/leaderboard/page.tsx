@@ -7,7 +7,7 @@ export default async function LeaderboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const leaderboard = await getFullLeaderboard();
+  const leaderboard = await getFullLeaderboard(user);
 
   return <LeaderboardClient initialLeaderboard={leaderboard} />;
 }

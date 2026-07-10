@@ -1,5 +1,6 @@
 import { db, TABLE, ScanCommand } from '@/lib/dynamodb';
-import type { Domain, Role, Subdomain } from '@/types';
+import { isPresidium } from '@/lib/permissions';
+import type { Domain, Role, Subdomain, SessionUser } from '@/types';
 
 export interface LeaderboardEntry {
   memberId: string;
@@ -17,7 +18,11 @@ export interface LeaderboardEntry {
 // params — returns every eligible member so the client can filter and
 // paginate without a network round-trip per filter change. Keep in sync if
 // the route's eligibility/sorting logic changes.
-export async function getFullLeaderboard(): Promise<LeaderboardEntry[]> {
+//
+// Director stars are private to Presidium and to Directors themselves (peer
+// visibility) — Managers/Associates/Builders never see a Director's rating.
+export async function getFullLeaderboard(viewer: SessionUser): Promise<LeaderboardEntry[]> {
+  const canSeeDirectors = isPresidium(viewer) || viewer.role === 'DIRECTOR';
   const memberProjection = {
     ProjectionExpression: 'memberId, #n, #r, #d, subdomain, totalStars, isActive',
     ExpressionAttributeNames: { '#n': 'name', '#r': 'role', '#d': 'domain' },
@@ -37,6 +42,7 @@ export async function getFullLeaderboard(): Promise<LeaderboardEntry[]> {
   return members
     .filter((m: any) => m.isActive)
     .filter((m: any) => m.role !== 'SBG_LEADER' && m.role !== 'SECRETARY')
+    .filter((m: any) => canSeeDirectors || m.role !== 'DIRECTOR')
     .map((m: any) => {
       const r = ratingsMap.get(m.memberId) || {};
       return {
