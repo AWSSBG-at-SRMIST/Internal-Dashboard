@@ -408,10 +408,9 @@ export default function NewTaskPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-blue-400 font-mono">
               <div className="flex items-center gap-2"><span className="font-bold text-green-400 flex-shrink-0">+2⭐</span><span>Submitted &gt;24h before deadline</span></div>
               <div className="flex items-center gap-2"><span className="font-bold text-blue-400 flex-shrink-0">+1⭐</span><span>Submitted within last 24h before</span></div>
-              <div className="flex items-center gap-2"><span className="font-bold text-[#888] flex-shrink-0">+0⭐</span><span>Submitted within 24h after deadline</span></div>
-              <div className="flex items-center gap-2"><span className="font-bold text-red-400 flex-shrink-0">-1⭐</span><span>Submitted more than 24h after</span></div>
+              <div className="flex items-center gap-2"><span className="font-bold text-red-400 flex-shrink-0">-1⭐</span><span>Late — within the 24h grace period after</span></div>
+              <div className="flex items-center gap-2"><span className="font-bold text-red-500 flex-shrink-0">-2⭐</span><span>No submission once grace period ends</span></div>
             </div>
-            <p className="text-xs text-blue-500 mt-2 font-mono">Priority: LOW×1 · MEDIUM×1.5 · HIGH×2</p>
           </CardContent>
         </Card>
 
