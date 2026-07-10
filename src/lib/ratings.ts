@@ -1,4 +1,4 @@
-import { db, TABLE, UpdateCommand, TransactWriteCommand } from './dynamodb';
+import { db, TABLE, UpdateCommand, TransactWriteCommand, QueryCommand } from './dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 
 type TransactItems = NonNullable<TransactWriteCommandInput['TransactItems']>;
@@ -148,6 +148,80 @@ export async function reverseSubmissionRating(submission: {
   }
 
   await db.send(new TransactWriteCommand({ TransactItems: transactItems }));
+}
+
+// When a task's deadline is extended, every already-APPROVED submission's star
+// award was calculated against the old deadline and is now stale. Recomputes
+// each one against the new deadline and applies the difference — moving a
+// submission between the approved/late-approved buckets and adjusting
+// totalStars by (newDelta - oldDelta), then updates the submission row so any
+// future reversal (task deletion) uses the corrected values. PENDING/REJECTED/
+// REVISION_REQUESTED submissions never had a star award, so there's nothing to
+// revise for them — they'll be rated correctly against the new deadline
+// whenever they're actually reviewed.
+export async function reviseApprovedSubmissionRatings(taskId: string, newDeadline: string): Promise<void> {
+  const approved: any[] = [];
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const res = await db.send(new QueryCommand({
+      TableName: TABLE.SUBMISSIONS,
+      IndexName: 'TaskIndex',
+      KeyConditionExpression: 'taskId = :tid',
+      FilterExpression: 'reviewStatus = :approved',
+      ExpressionAttributeValues: { ':tid': taskId, ':approved': 'APPROVED' },
+      ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+    }));
+    approved.push(...(res.Items || []));
+    lastKey = res.LastEvaluatedKey as Record<string, any> | undefined;
+  } while (lastKey);
+
+  for (const sub of approved) {
+    const { delta: newDelta, late: newLate } = calculateRating(sub.submittedAt, newDeadline);
+    const oldDelta = sub.ratingAwarded ?? 0;
+    const oldLate = sub.wasLate === true;
+    if (newDelta === oldDelta && newLate === oldLate) continue;
+
+    const ts = new Date().toISOString();
+    const transactItems: TransactItems = [];
+    if (oldLate !== newLate) {
+      transactItems.push({
+        Update: {
+          TableName: TABLE.RATINGS,
+          Key: { memberId: sub.memberId },
+          UpdateExpression: `SET
+            approvedCount     = if_not_exists(approvedCount, :zero)     + :appDelta,
+            lateApprovedCount = if_not_exists(lateApprovedCount, :zero) + :lateDelta,
+            lastUpdated       = :ts`,
+          ExpressionAttributeValues: {
+            ':zero': 0,
+            ':appDelta': newLate ? -1 : 1,
+            ':lateDelta': newLate ? 1 : -1,
+            ':ts': ts,
+          },
+        },
+      });
+    }
+    if (newDelta !== oldDelta) {
+      transactItems.push({
+        Update: {
+          TableName: TABLE.MEMBERS,
+          Key: { memberId: sub.memberId },
+          UpdateExpression: 'SET totalStars = totalStars + :delta',
+          ExpressionAttributeValues: { ':delta': newDelta - oldDelta },
+        },
+      });
+    }
+    if (transactItems.length > 0) {
+      await db.send(new TransactWriteCommand({ TransactItems: transactItems }));
+    }
+
+    await db.send(new UpdateCommand({
+      TableName: TABLE.SUBMISSIONS,
+      Key: { submissionId: sub.submissionId },
+      UpdateExpression: 'SET ratingAwarded = :r, wasLate = :late',
+      ExpressionAttributeValues: { ':r': newDelta, ':late': newLate },
+    }));
+  }
 }
 
 export function getRatingLabel(stars: number): string {

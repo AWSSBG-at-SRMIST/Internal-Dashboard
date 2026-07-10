@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { db, TABLE, GetCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@/lib/dynamodb';
+import { db, TABLE, GetCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium, canCreateTask, isTaskVisible, canSubmitTask } from '@/lib/permissions';
-import { reverseSubmissionRating } from '@/lib/ratings';
-import { autoCloseIfExpired } from '@/lib/tasks';
+import { isPresidium, canCreateTask, isTaskVisible, getTaskRelationship, canSubmitTask, hasHierarchicalReviewAccess } from '@/lib/permissions';
+import { reverseSubmissionRating, reviseApprovedSubmissionRatings } from '@/lib/ratings';
+import { autoCloseIfExpired, reverseNoSubmissionPenalty, resolveHierarchicalReviewers } from '@/lib/tasks';
 import { sendDelegateReviewEmail } from '@/lib/email';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
@@ -49,17 +49,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
       if (active) collectiveLockedBy = { memberId: active.memberId, memberName: active.memberName };
     }
 
-    // Task creator and delegated reviewers always see all submissions.
-    // Presidium tasks are centralised — if the creator was presidium, any
-    // presidium member (SBG_LEADER or SECRETARY) can see all submissions too.
-    // Org-wide tasks are centralised the same way regardless of who created them
-    // (Presidium or an HR & Admin Manager/Associate), since they're club-wide.
+    // Task creator and delegated reviewers always see all submissions and can
+    // act on them. Presidium tasks are centralised — if the creator was
+    // presidium, any presidium member can act too. On top of that, the
+    // hierarchy directly above whoever created the task (e.g. a Manager's
+    // Director, an Associate's Manager+Director) also gets full action power —
+    // see hasHierarchicalReviewAccess for the exact rule per scope.
     const creatorIsPresidium = taskResult.Item.createdByRole === 'SBG_LEADER' || taskResult.Item.createdByRole === 'SECRETARY';
-    const isOrgWide = taskResult.Item.assignmentType === 'ORG_WIDE';
+    const hasHierarchyAccess = hasHierarchicalReviewAccess(user, taskResult.Item as any);
     const canReview = taskResult.Item.createdBy === user.memberId
       || isDelegatedReviewer
-      || (isPresidium(user) && (creatorIsPresidium || isOrgWide));
-    const visibleSubmissions = canReview ? submissions : mySubmissions;
+      || (isPresidium(user) && creatorIsPresidium)
+      || hasHierarchyAccess;
+
+    // Broader than canReview: everyone with any oversight relationship to the
+    // task (not just those with action power) can see every submission —
+    // they just can't approve/reject/close/edit unless canReview is also true.
+    const canViewSubmissions = canReview || getTaskRelationship(user, taskResult.Item as any) === 'VISIBLE_ONLY';
+    const visibleSubmissions = canViewSubmissions ? submissions : mySubmissions;
+
     const canSubmit = taskResult.Item.status === 'OPEN'
       && !collectiveLockedBy
       && !isDelegatedReviewer
@@ -73,6 +81,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
     // Tells the picker what members to show: 'ANY' for presidium, or a domain string for directors.
     const delegateFilter: string = isPresidium(user) ? 'ANY' : (user.domain ?? 'ANY');
 
+    // Named hierarchy reviewers (e.g. "the Director") shown alongside manually
+    // delegated ones in the UI so it's clear who else can review this task.
+    let hierarchyReviewers: Array<{ memberId: string; memberName: string; role: string }> = [];
+    if (canViewSubmissions) {
+      const membersResult = await db.send(new ScanCommand({
+        TableName: TABLE.MEMBERS,
+        ProjectionExpression: 'memberId, #n, #r, #d, subdomain, isActive',
+        ExpressionAttributeNames: { '#n': 'name', '#r': 'role', '#d': 'domain' },
+      }));
+      const activeMembers = (membersResult.Items || []).filter((m: any) => m.isActive !== false);
+      hierarchyReviewers = resolveHierarchicalReviewers(taskResult.Item, activeMembers)
+        .map((m: any) => ({ memberId: m.memberId, memberName: m.name, role: m.role }));
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -80,12 +102,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
         submissions: visibleSubmissions.sort((a: any, b: any) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()),
         mySubmission: mySubmission || null,
         canReview,
+        canViewSubmissions,
         canSubmit,
         canDelete,
         canClose,
         canEdit,
         canDelegate,
         delegateFilter,
+        hierarchyReviewers,
         collectiveLockedBy,
       },
     });
@@ -125,8 +149,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
 
     const isCreator = task.Item.createdBy === user.memberId;
     const taskCreatorIsPresidium = task.Item.createdByRole === 'SBG_LEADER' || task.Item.createdByRole === 'SECRETARY';
-    const isOrgWide = task.Item.assignmentType === 'ORG_WIDE';
-    const canReview = isCreator || isDelegatedReviewer || (isPresidium(user) && (taskCreatorIsPresidium || isOrgWide));
+    const canReview = isCreator
+      || isDelegatedReviewer
+      || (isPresidium(user) && taskCreatorIsPresidium)
+      || hasHierarchicalReviewAccess(user, task.Item as any);
 
     // Mirrors GET's canClose (canReview || isCreator) — a reviewer who didn't
     // create the task must still be able to close it, not just see the button.
@@ -177,6 +203,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       return NextResponse.json({ error: 'Only reviewers can reopen a closed task' }, { status: 403 });
     }
 
+    // The edit form always resends the deadline field even when the user
+    // didn't touch it, so only treat it as an actual change (and trigger the
+    // reopen/revise logic below) if the resulting instant is different from
+    // what's already stored — a raw string compare would false-positive on
+    // format differences alone (e.g. datetime-local vs stored ISO).
+    const deadlineChanged = deadline !== undefined
+      && new Date(deadline).getTime() !== new Date(task.Item.deadline).getTime();
+
+    // Extending the deadline on a closed task is only ever done to give it a
+    // fresh shot — reopen it implicitly unless the caller is separately
+    // setting status explicitly. If the task had already taken the
+    // no-submission penalty, that verdict was against the old deadline and no
+    // longer holds, so reverse it and let auto-close re-evaluate fresh.
+    const hadNoSubmissionPenalty = !!task.Item.noSubmissionPenaltyAt;
+    const isReopeningViaDeadlineExtend =
+      deadlineChanged && status === undefined && task.Item.status === 'CLOSED';
+    const effectiveStatus = isReopeningViaDeadlineExtend ? 'OPEN' : status;
+
+    if (deadlineChanged && hadNoSubmissionPenalty) {
+      await reverseNoSubmissionPenalty(task.Item as any);
+    }
+
     const setParts: string[] = [];
     const exprNames: Record<string, string> = {};
     const exprValues: Record<string, any> = {};
@@ -188,8 +236,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       setParts.push('deadline = :dl', 'reminderSentAt = :null');
       exprValues[':dl'] = deadline;
       exprValues[':null'] = null;
+      if (deadlineChanged && hadNoSubmissionPenalty) {
+        setParts.push('noSubmissionPenaltyAt = :nspNull', 'noSubmissionPenalisedMemberIds = :emptyIds');
+        exprValues[':nspNull'] = null;
+        exprValues[':emptyIds'] = [];
+      }
     }
-    if (status !== undefined)            { exprNames['#s'] = 'status'; setParts.push('#s = :s'); exprValues[':s'] = status; }
+    if (effectiveStatus !== undefined)   { exprNames['#s'] = 'status'; setParts.push('#s = :s'); exprValues[':s'] = effectiveStatus; }
     if (delegatedReviewers !== undefined){ setParts.push('delegatedReviewers = :dr'); exprValues[':dr'] = delegatedReviewers; }
 
     if (setParts.length === 0) {
@@ -203,6 +256,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       ...(Object.keys(exprNames).length > 0 && { ExpressionAttributeNames: exprNames }),
       ExpressionAttributeValues: exprValues,
     }));
+
+    // Every already-approved submission's star award was calculated against
+    // the old deadline — recompute against the new one so a straggler who was
+    // "late" under the old deadline (and got -1⭐) correctly becomes "on time"
+    // (or vice versa) once the deadline moves.
+    if (deadlineChanged) {
+      await reviseApprovedSubmissionRatings(taskId, deadline);
+    }
 
     await logAction(user, 'UPDATE_TASK', 'TASK', taskId, `Updated task: ${title ?? taskId}`);
 
@@ -265,6 +326,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
         db.send(new DeleteCommand({ TableName: TABLE.SUBMISSIONS, Key: { submissionId: s.submissionId } }))
       ));
     }
+
+    // Also reverse the blanket no-submission penalty, if one was applied —
+    // it isn't tied to any submission row so the loop above never touches it.
+    await reverseNoSubmissionPenalty(task.Item as any);
 
     await db.send(new DeleteCommand({ TableName: TABLE.TASKS, Key: { taskId } }));
     await logAction(user, 'DELETE_TASK', 'TASK', taskId, `Deleted task: ${task.Item.title}`);

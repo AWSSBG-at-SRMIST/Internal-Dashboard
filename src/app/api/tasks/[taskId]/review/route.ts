@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { calculateRating, applyRating } from '@/lib/ratings';
-import { isPresidium } from '@/lib/permissions';
+import { isPresidium, hasHierarchicalReviewAccess } from '@/lib/permissions';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   const user = await getCurrentUser();
@@ -38,14 +38,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     }
 
     // Mirror the same canReview logic as GET: creator, delegated reviewer,
-    // or presidium on a presidium-created or org-wide task.
+    // presidium on a presidium-created task, or the hierarchy directly above
+    // whoever created the task (e.g. a Manager's Director).
     const delegatedReviewers = (task.delegatedReviewers || []) as Array<{ memberId: string }>;
     const isDelegatedReviewer = delegatedReviewers.some(d => d.memberId === user.memberId);
     const taskCreatorIsPresidium = task.createdByRole === 'SBG_LEADER' || task.createdByRole === 'SECRETARY';
-    const isOrgWide = task.assignmentType === 'ORG_WIDE';
     const canReview = task.createdBy === user.memberId
       || isDelegatedReviewer
-      || (isPresidium(user) && (taskCreatorIsPresidium || isOrgWide));
+      || (isPresidium(user) && taskCreatorIsPresidium)
+      || hasHierarchicalReviewAccess(user, task as any);
 
     if (!canReview) {
       return NextResponse.json({ error: 'Not authorized to review this submission' }, { status: 403 });

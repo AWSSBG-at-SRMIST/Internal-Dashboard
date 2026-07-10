@@ -23,11 +23,34 @@ export function getEligibleMembers(task: any, members: any[]): any[] {
   }
   return [];
 }
+
+// Resolves the specific named members who get automatic hierarchical review
+// access to a task (mirrors hasHierarchicalReviewAccess in permissions.ts) —
+// used to display them alongside manually delegated reviewers in the UI.
+// Excludes the task creator themself, since they're already shown separately.
+export function resolveHierarchicalReviewers(task: any, members: any[]): any[] {
+  const scope = task.assignmentType;
+  const others = members.filter((m: any) => m.memberId !== task.createdBy);
+
+  if (scope === 'ORG_WIDE' || scope === 'GENERAL') {
+    return others.filter((m: any) => m.role === 'SBG_LEADER' || m.role === 'SECRETARY');
+  }
+  if (scope === 'SUBDOMAIN_WIDE' || scope === 'SUBDOMAIN' || scope === 'INDIVIDUAL') {
+    return others.filter((m: any) => m.role === 'DIRECTOR' && m.domain === task.domain);
+  }
+  if (scope === 'BUILDERS_ONLY') {
+    return others.filter((m: any) =>
+      (m.role === 'DIRECTOR' && m.domain === task.domain) ||
+      (m.role === 'MANAGER' && m.domain === task.domain && m.subdomain === task.subdomain)
+    );
+  }
+  return [];
+}
 import { isDeadlinePassed } from '@/lib/utils';
 import { isTaskVisible } from '@/lib/permissions';
 import type { SessionUser, Task } from '@/types';
 
-const NO_SUBMISSION_PENALTY = -2;
+export const NO_SUBMISSION_PENALTY = -2;
 const GRACE_MS = 24 * 60 * 60 * 1000;
 
 const SYSTEM_ACTOR: SessionUser = {
@@ -168,6 +191,16 @@ export async function closeWithNoSubmissionPenalty(
     )
   );
 
+  // Remember exactly who was penalised so a later reversal (deadline extended,
+  // or the task deleted) can undo the exact -2s applied, regardless of any
+  // roster changes between now and then.
+  await db.send(new UpdateCommand({
+    TableName: TABLE.TASKS,
+    Key: { taskId: task.taskId },
+    UpdateExpression: 'SET noSubmissionPenalisedMemberIds = :ids',
+    ExpressionAttributeValues: { ':ids': nonSubmitters.map((m: any) => m.memberId) },
+  }));
+
   await logAction(
     SYSTEM_ACTOR,
     'AUTO_CLOSE_TASK',
@@ -177,6 +210,29 @@ export async function closeWithNoSubmissionPenalty(
   );
 
   return { status: 'CLOSED', applied: true, penalisedCount: nonSubmitters.length };
+}
+
+// Undoes a previously-applied no-submission penalty (restores the -2 to every
+// member it was taken from) using the exact member list stamped at penalty
+// time — used when a task is deleted, or when its deadline is extended and the
+// zero-submission verdict that earned the penalty no longer holds. Does NOT
+// touch the task's own noSubmissionPenaltyAt/noSubmissionPenalisedMemberIds
+// fields; the caller clears those (or deletes the task) separately.
+export async function reverseNoSubmissionPenalty(
+  task: Pick<Task, 'noSubmissionPenaltyAt' | 'noSubmissionPenalisedMemberIds'>
+): Promise<void> {
+  if (!task.noSubmissionPenaltyAt) return;
+  const penalisedIds = task.noSubmissionPenalisedMemberIds || [];
+  await Promise.allSettled(
+    penalisedIds.map((memberId: string) =>
+      db.send(new UpdateCommand({
+        TableName: TABLE.MEMBERS,
+        Key: { memberId },
+        UpdateExpression: 'SET totalStars = totalStars - :delta',
+        ExpressionAttributeValues: { ':delta': NO_SUBMISSION_PENALTY },
+      }))
+    )
+  );
 }
 
 // Mirrors the GET /api/tasks (no status/my filters) logic — used by the

@@ -37,14 +37,35 @@ export function validateRoleScope(role: string, domain?: string | null, subdomai
   return null;
 }
 
-export function canReviewSubmission(
+// Grants review/approve/reject/close/edit power to the hierarchy standing directly
+// above whoever created the task — on top of the creator themself (and any
+// explicitly delegated reviewers, checked separately by callers). This is in
+// addition to, not instead of, isCreator/isDelegatedReviewer/presidium-on-their-
+// own-tasks, which callers keep checking alongside this.
+//
+//   Associate-created (BUILDERS_ONLY)              -> that subdomain's Manager, that domain's Director
+//   Manager-created   (SUBDOMAIN_WIDE, INDIVIDUAL)  -> that domain's Director
+//   Director-created  (DOMAIN_WIDE, SUBDOMAIN_LEADERSHIP) -> nobody extra (creator only)
+//   Org-wide (ORG_WIDE/GENERAL, whoever created it) -> Presidium, always
+//   Presidium-created (ALL_DIRECTORS, SINGLE_DIRECTOR) -> handled separately by
+//     callers' existing "creatorIsPresidium" check, not by this function.
+export function hasHierarchicalReviewAccess(
   actor: SessionUser,
-  submission: { memberId: string; domain?: Domain | null; subdomain?: Subdomain | null },
+  task: { assignmentType: string; domain?: Domain | null; subdomain?: Subdomain | null },
 ): boolean {
-  if (isPresidium(actor)) return true;
-  if (actor.memberId === submission.memberId) return false;
-  if (actor.role === 'DIRECTOR') return actor.domain === submission.domain;
-  if (actor.role === 'MANAGER') return actor.domain === submission.domain && actor.subdomain === submission.subdomain;
+  const scope = task.assignmentType;
+
+  if (scope === 'ORG_WIDE' || scope === 'GENERAL') {
+    return isPresidium(actor);
+  }
+  if (scope === 'SUBDOMAIN_WIDE' || scope === 'SUBDOMAIN' || scope === 'INDIVIDUAL') {
+    return actor.role === 'DIRECTOR' && actor.domain === task.domain;
+  }
+  if (scope === 'BUILDERS_ONLY') {
+    if (actor.role === 'DIRECTOR') return actor.domain === task.domain;
+    if (actor.role === 'MANAGER') return actor.domain === task.domain && actor.subdomain === task.subdomain;
+    return false;
+  }
   return false;
 }
 

@@ -95,6 +95,10 @@ export interface Task {
   reminderSentAt?: string | null;
   delegatedReviewers?: Array<{ memberId: string; memberName: string }>;
   noSubmissionPenaltyAt?: string | null;
+  // memberIds actually penalised by the no-submission auto-close pass — kept so a
+  // later reversal (deadline extended, or task deleted) can undo the exact -2s
+  // applied, regardless of any roster changes since.
+  noSubmissionPenalisedMemberIds?: string[] | null;
 }
 
 export type ReviewStatus = 'PENDING' | 'REVISION_REQUESTED' | 'APPROVED' | 'REJECTED';

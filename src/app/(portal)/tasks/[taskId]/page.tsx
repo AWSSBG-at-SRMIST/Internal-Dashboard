@@ -28,12 +28,14 @@ interface TaskDetailData {
   submissions: Submission[];
   mySubmission: Submission | null;
   canReview: boolean;
+  canViewSubmissions: boolean;
   canSubmit: boolean;
   canDelete: boolean;
   canClose: boolean;
   canEdit: boolean;
   canDelegate: boolean;
   delegateFilter: string; // 'ANY' for presidium, domain string for directors
+  hierarchyReviewers: Array<{ memberId: string; memberName: string; role: string }>;
   collectiveLockedBy: { memberId: string; memberName: string } | null;
 }
 
@@ -261,7 +263,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   );
   if (!data) return null;
 
-  const { task, submissions, mySubmission, canReview, canSubmit, canDelete, canClose, canEdit, canDelegate, delegateFilter, collectiveLockedBy } = data;
+  const { task, submissions, mySubmission, canReview, canViewSubmissions, canSubmit, canDelete, canClose, canEdit, canDelegate, delegateFilter, hierarchyReviewers, collectiveLockedBy } = data;
   const overdue = isDeadlinePassed(task.deadline);
 
   return (
@@ -342,24 +344,25 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
           <div className="grid grid-cols-2 gap-1.5 text-xs text-blue-400 font-mono">
             <div><span className="font-bold text-green-400">+2⭐</span> &gt;24h before deadline</div>
             <div><span className="font-bold text-blue-400">+1⭐</span> Last 24h before deadline</div>
-            <div><span className="font-bold text-[#888]">+0⭐</span> Within 24h after deadline</div>
-            <div><span className="font-bold text-red-400">-1⭐</span> More than 24h after deadline</div>
+            <div className="col-span-2"><span className="font-bold text-red-400">-1⭐</span> Late — within the 24h grace period after deadline</div>
             <div className="col-span-2 border-t border-blue-500/20 pt-1.5 mt-0.5">
-              <span className="font-bold text-red-500">-2⭐</span> <span className="text-blue-500">No submission 24h+ past deadline (auto-close)</span>
+              <span className="font-bold text-red-500">-2⭐</span> <span className="text-blue-500">No submission by the time the 24h grace period ends (auto-close)</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Delegated Reviewers */}
-      {canDelegate && (
+      {/* Delegated Reviewers — manually delegated reviewers plus whoever
+          automatically gets review access via hierarchy (e.g. the Director
+          above a Manager who created this task). */}
+      {canViewSubmissions && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <UserPlus size={15} /> Delegated Reviewers
               </CardTitle>
-              {(task.delegatedReviewers?.length ?? 0) < 2 && (
+              {canDelegate && (task.delegatedReviewers?.length ?? 0) < 2 && (
                 <Button size="sm" variant="outline" onClick={openDelegateModal} disabled={savingDelegate}>
                   <Plus size={13} /> Add
                 </Button>
@@ -367,16 +370,26 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
             </div>
           </CardHeader>
           <CardContent>
-            {!task.delegatedReviewers?.length ? (
+            {!hierarchyReviewers.length && !task.delegatedReviewers?.length ? (
               <p className="text-sm text-[#555] font-mono">No delegates — task reviewed by default reviewers only</p>
             ) : (
               <div className="space-y-2">
-                {task.delegatedReviewers.map(d => (
+                {hierarchyReviewers.map(h => (
+                  <div key={h.memberId} className="flex items-center justify-between p-2.5 border-2 border-[#2d2d2d] bg-[#111]">
+                    <span className="text-sm font-bold text-[#f0f0f0] uppercase tracking-wide">{h.memberName}</span>
+                    <span className="text-xs text-[#666] font-mono uppercase">{h.role} · Auto</span>
+                  </div>
+                ))}
+                {task.delegatedReviewers?.map(d => (
                   <div key={d.memberId} className="flex items-center justify-between p-2.5 border-2 border-[#2d2d2d] bg-[#111]">
                     <span className="text-sm font-bold text-[#f0f0f0] uppercase tracking-wide">{d.memberName}</span>
-                    <Button size="sm" variant="ghost" onClick={() => removeDelegate(d.memberId)} disabled={savingDelegate}>
-                      {savingDelegate ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
-                    </Button>
+                    {canDelegate ? (
+                      <Button size="sm" variant="ghost" onClick={() => removeDelegate(d.memberId)} disabled={savingDelegate}>
+                        {savingDelegate ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-[#666] font-mono uppercase">Manually delegated</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -528,8 +541,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
         </Card>
       )}
 
-      {/* Submissions List (for reviewers) */}
-      {canReview && (
+      {/* Submissions List (for reviewers and hierarchical overseers) */}
+      {canViewSubmissions && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -602,7 +615,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                     ))}
                   </div>
                 )}
-                {sub.reviewStatus === 'PENDING' && (
+                {sub.reviewStatus === 'PENDING' && canReview && (
                   <div className="space-y-2 pt-2 border-t border-[#2d2d2d]">
                     <Textarea
                       value={feedbackDrafts[sub.submissionId] || ''}
