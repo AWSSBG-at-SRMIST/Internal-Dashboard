@@ -3,6 +3,7 @@ import { db, TABLE, QueryCommand, ScanCommand, UpdateCommand } from '@/lib/dynam
 import { logAction } from '@/lib/audit';
 import { sendTaskReminderEmail } from '@/lib/email';
 import { getEligibleMembers } from '@/lib/tasks';
+import { parseTaskDeadline } from '@/lib/utils';
 import type { SessionUser } from '@/types';
 import { timingSafeEqual } from 'crypto';
 
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     const dueSoonTasks = (tasksResult.Items || []).filter((t: any) => {
       if (t.reminderSentAt) return false;
-      const deadline = new Date(t.deadline).getTime();
+      const deadline = parseTaskDeadline(t.deadline).getTime();
       return deadline > now && deadline <= windowEnd;
     });
 

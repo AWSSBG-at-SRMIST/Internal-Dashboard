@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, TABLE, QueryCommand } from '@/lib/dynamodb';
 import { closeWithNoSubmissionPenalty } from '@/lib/tasks';
+import { parseTaskDeadline } from '@/lib/utils';
 import { timingSafeEqual } from 'crypto';
 
 export const maxDuration = 60;
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const now = Date.now();
-    const cutoff = new Date(now - 24 * 60 * 60 * 1000).toISOString(); // 24h ago
+    const cutoff = now - 24 * 60 * 60 * 1000; // 24h ago
 
     // Query both OPEN and CLOSED tasks — tasks closed lazily (by autoCloseIfExpired)
     // still need the penalty pass if it hasn't been claimed yet.
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
     // penalise whoever hasn't submitted).
     const qualifying = allTasks.filter((t: any) =>
       !t.noSubmissionPenaltyAt &&
-      t.deadline < cutoff &&
+      parseTaskDeadline(t.deadline).getTime() < cutoff &&
       ((t.totalSubmissions ?? 0) === 0 || (t.submissionMode === 'INDIVIDUAL' && !t.assignedToId))
     );
 

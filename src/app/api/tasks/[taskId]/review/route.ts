@@ -67,18 +67,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
 
     const newStatus = action === 'APPROVE' ? 'APPROVED' : action === 'REJECT' ? 'REJECTED' : 'REVISION_REQUESTED';
 
-    // COLLECTIVE task: approving the first submission closes the task for everyone.
-    if (action === 'APPROVE' && task.submissionMode === 'COLLECTIVE') {
-      await db.send(new UpdateCommand({
-        TableName: TABLE.TASKS,
-        Key: { taskId },
-        UpdateExpression: 'SET #s = :closed',
-        ConditionExpression: '#s = :open',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':closed': 'CLOSED', ':open': 'OPEN' },
-      })).catch((err: any) => {
-        if (err.name !== 'ConditionalCheckFailedException') throw err;
-      });
+    if (task.submissionMode === 'COLLECTIVE') {
+      if (action === 'APPROVE') {
+        // Approving the first submission closes the task for everyone. If this
+        // fails (task no longer OPEN), another submission for this same task
+        // was already approved first — don't silently continue and award a
+        // second star for a task that's already been credited once.
+        const closed = await db.send(new UpdateCommand({
+          TableName: TABLE.TASKS,
+          Key: { taskId },
+          UpdateExpression: 'SET #s = :closed',
+          ConditionExpression: '#s = :open',
+          ExpressionAttributeNames: { '#s': 'status' },
+          ExpressionAttributeValues: { ':closed': 'CLOSED', ':open': 'OPEN' },
+        })).then(() => true).catch((err: any) => {
+          if (err.name !== 'ConditionalCheckFailedException') throw err;
+          return false;
+        });
+        if (!closed) {
+          return NextResponse.json({ error: 'This task was already closed by another approved submission' }, { status: 409 });
+        }
+      } else {
+        // REJECT or REVISE both allow a fresh submission afterwards (see the
+        // resubmission check in tasks/[taskId]/route.ts) — release the
+        // active-submission claim taken at submit time so that can happen.
+        await db.send(new UpdateCommand({
+          TableName: TABLE.TASKS,
+          Key: { taskId },
+          UpdateExpression: 'REMOVE activeSubmissionId',
+        }));
+      }
     }
 
     await db.send(new UpdateCommand({

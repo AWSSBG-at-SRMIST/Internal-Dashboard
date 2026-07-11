@@ -1,4 +1,5 @@
 import { db, TABLE, ScanCommand } from '@/lib/dynamodb';
+import { getISTDateString } from '@/lib/utils';
 
 export interface AnalyticsResponse {
   overview: {
@@ -27,7 +28,7 @@ const DOMAINS = ['Technical', 'Corporate', 'Creatives'];
 function bucketByDay<T>(items: T[], getDate: (item: T) => string, getValue: (item: T) => number): { date: string; value: number }[] {
   const buckets: Record<string, number> = {};
   for (const item of items) {
-    const day = new Date(getDate(item)).toISOString().slice(0, 10);
+    const day = getISTDateString(new Date(getDate(item)));
     buckets[day] = (buckets[day] || 0) + getValue(item);
   }
   return Object.entries(buckets)

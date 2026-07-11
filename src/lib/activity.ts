@@ -1,16 +1,11 @@
 import { db, TABLE, UpdateCommand, ScanCommand } from '@/lib/dynamodb';
+import { getISTDateString } from '@/lib/utils';
 import type { SessionUser } from '@/types';
 
 // Minimum gap between two heartbeats that both count toward activeMinutes —
 // stops multiple tabs/devices from the same member double-counting minutes
 // when their heartbeats land within the same window.
 const MIN_HEARTBEAT_GAP_MS = 55_000;
-
-function getISTDateString(date: Date = new Date()): string {
-  // en-CA formats as YYYY-MM-DD, which also happens to sort correctly as a
-  // plain string — exactly what date-range comparisons below rely on.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
-}
 
 // Called on every heartbeat ping while a member has the app open and
 // focused. Accumulates activeMinutes on a per-member-per-day row

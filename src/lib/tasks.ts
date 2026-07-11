@@ -46,7 +46,7 @@ export function resolveHierarchicalReviewers(task: any, members: any[]): any[] {
   }
   return [];
 }
-import { isDeadlinePassed } from '@/lib/utils';
+import { isDeadlinePassed, parseTaskDeadline } from '@/lib/utils';
 import { isTaskVisible } from '@/lib/permissions';
 import type { SessionUser, Task } from '@/types';
 
@@ -67,6 +67,30 @@ type AutoCloseTask = Pick<Task,
 // own independent entry — one person submitting must not lock the others out.
 function isMultiAssigneeIndividual(task: Pick<Task, 'submissionMode' | 'assignedToId'>): boolean {
   return task.submissionMode === 'INDIVIDUAL' && !task.assignedToId;
+}
+
+// totalSubmissions counts every submit attempt ever made, including ones later
+// REJECTED — a member is allowed to resubmit after a rejection (see the
+// PENDING/APPROVED-only lock in the submit route), so "totalSubmissions > 0"
+// alone isn't safe to treat as "a valid submission exists, close the task."
+// This checks for an actually-active (not-yet-rejected) submission instead,
+// mirroring the exact filter the submit route uses to decide whether a
+// resubmission should be allowed.
+async function hasActiveSubmission(taskId: string): Promise<boolean> {
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const result = await db.send(new QueryCommand({
+      TableName: TABLE.SUBMISSIONS,
+      IndexName: 'TaskIndex',
+      KeyConditionExpression: 'taskId = :tid',
+      FilterExpression: 'reviewStatus = :pending OR reviewStatus = :approved',
+      ExpressionAttributeValues: { ':tid': taskId, ':pending': 'PENDING', ':approved': 'APPROVED' },
+      ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+    }));
+    if (result.Items && result.Items.length > 0) return true;
+    lastKey = result.LastEvaluatedKey as Record<string, any> | undefined;
+  } while (lastKey);
+  return false;
 }
 
 async function closeSimple(taskId: string): Promise<string> {
@@ -101,11 +125,11 @@ export async function autoCloseIfExpired(task: AutoCloseTask): Promise<string> {
   const totalSubmissions = task.totalSubmissions ?? 0;
   const multiAssignee = isMultiAssigneeIndividual(task);
 
-  if (!multiAssignee && totalSubmissions > 0) {
+  if (!multiAssignee && totalSubmissions > 0 && await hasActiveSubmission(task.taskId)) {
     return closeSimple(task.taskId);
   }
 
-  const graceEndMs = new Date(task.deadline).getTime() + GRACE_MS;
+  const graceEndMs = parseTaskDeadline(task.deadline).getTime() + GRACE_MS;
   if (Date.now() <= graceEndMs) return 'OPEN';
 
   return (await closeWithNoSubmissionPenalty(task)).status;
@@ -180,7 +204,7 @@ export async function closeWithNoSubmissionPenalty(
     nonSubmitters = eligible.filter((m: any) => !submittedIds.has(m.memberId));
   }
 
-  await Promise.allSettled(
+  const penaltyResults = await Promise.allSettled(
     nonSubmitters.map((m: any) =>
       db.send(new UpdateCommand({
         TableName: TABLE.MEMBERS,
@@ -190,6 +214,12 @@ export async function closeWithNoSubmissionPenalty(
       }))
     )
   );
+  // Only record IDs whose write actually succeeded — recording the full list
+  // regardless of outcome would let a later reversal credit a member +2 they
+  // never actually lost (their -2 write failed but they'd still be "undone").
+  const penalisedIds = nonSubmitters
+    .filter((_: any, i: number) => penaltyResults[i].status === 'fulfilled')
+    .map((m: any) => m.memberId);
 
   // Remember exactly who was penalised so a later reversal (deadline extended,
   // or the task deleted) can undo the exact -2s applied, regardless of any
@@ -198,7 +228,7 @@ export async function closeWithNoSubmissionPenalty(
     TableName: TABLE.TASKS,
     Key: { taskId: task.taskId },
     UpdateExpression: 'SET noSubmissionPenalisedMemberIds = :ids',
-    ExpressionAttributeValues: { ':ids': nonSubmitters.map((m: any) => m.memberId) },
+    ExpressionAttributeValues: { ':ids': penalisedIds },
   }));
 
   await logAction(
@@ -206,10 +236,10 @@ export async function closeWithNoSubmissionPenalty(
     'AUTO_CLOSE_TASK',
     'TASK',
     task.taskId,
-    `Auto-closed "${task.title}" — ${nonSubmitters.length} of ${eligible.length} eligible member(s) had not submitted by the 24h grace deadline; penalised ${NO_SUBMISSION_PENALTY} stars each.`
+    `Auto-closed "${task.title}" — ${penalisedIds.length} of ${eligible.length} eligible member(s) had not submitted by the 24h grace deadline; penalised ${NO_SUBMISSION_PENALTY} stars each.`
   );
 
-  return { status: 'CLOSED', applied: true, penalisedCount: nonSubmitters.length };
+  return { status: 'CLOSED', applied: true, penalisedCount: penalisedIds.length };
 }
 
 // Undoes a previously-applied no-submission penalty (restores the -2 to every

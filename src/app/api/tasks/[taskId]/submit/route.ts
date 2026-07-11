@@ -26,28 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
 
     const isCollective = task.Item.submissionMode === 'COLLECTIVE';
 
-    if (isCollective) {
-      // COLLECTIVE: lock the task once anyone submits — only one active submission allowed.
-      // Paginate to be safe (FilterExpression applies post-1MB-page).
-      let lastKey: Record<string, any> | undefined;
-      do {
-        const existing = await db.send(new QueryCommand({
-          TableName: TABLE.SUBMISSIONS,
-          IndexName: 'TaskIndex',
-          KeyConditionExpression: 'taskId = :tid',
-          FilterExpression: 'reviewStatus = :pending OR reviewStatus = :approved',
-          ExpressionAttributeValues: { ':tid': taskId, ':pending': 'PENDING', ':approved': 'APPROVED' },
-          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-        }));
-        if (existing.Items && existing.Items.length > 0) {
-          const blocker = existing.Items[0];
-          return NextResponse.json({
-            error: `This task has already been submitted by ${blocker.memberName}`,
-          }, { status: 409 });
-        }
-        lastKey = existing.LastEvaluatedKey as Record<string, any> | undefined;
-      } while (lastKey);
-    } else {
+    if (!isCollective) {
       // INDIVIDUAL: only block if *this* member already has an active submission.
       let lastKey: Record<string, any> | undefined;
       do {
@@ -83,6 +62,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tas
     });
 
     const submissionId = randomUUID();
+
+    if (isCollective) {
+      // Atomically claim the task's single active-submission slot — a bare
+      // conditional update on the task's own item (single deterministic key),
+      // so two simultaneous submit requests can't both pass a query-then-put
+      // check and both land as PENDING. Cleared by the review route on REJECT
+      // so the slot reopens for anyone to submit again.
+      const claimed = await db.send(new UpdateCommand({
+        TableName: TABLE.TASKS,
+        Key: { taskId },
+        UpdateExpression: 'SET activeSubmissionId = :sid',
+        ConditionExpression: 'attribute_not_exists(activeSubmissionId)',
+        ExpressionAttributeValues: { ':sid': submissionId },
+      })).then(() => true).catch((err: any) => {
+        if (err.name !== 'ConditionalCheckFailedException') throw err;
+        return false;
+      });
+      if (!claimed) {
+        return NextResponse.json({ error: 'This task has already been submitted by someone else' }, { status: 409 });
+      }
+    }
+
     const submission = {
       submissionId,
       taskId,

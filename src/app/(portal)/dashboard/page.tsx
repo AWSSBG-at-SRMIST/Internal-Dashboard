@@ -3,7 +3,7 @@ import { db, TABLE, ScanCommand, QueryCommand } from '@/lib/dynamodb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckSquare, Users, Link2, TrendingUp, Clock, Star, CalendarClock } from 'lucide-react';
-import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getAssignmentScopeLabel, getGreeting, timeAgo, formatRole } from '@/lib/utils';
+import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getAssignmentScopeLabel, getGreeting, timeAgo, formatRole, parseTaskDeadline } from '@/lib/utils';
 import { isTaskVisible, getTaskRelationship } from '@/lib/permissions';
 import type { SessionUser, Domain, Subdomain } from '@/types';
 import Link from 'next/link';
@@ -62,10 +62,10 @@ async function getDashboardStats(user: SessionUser) {
     const weekAhead = Date.now() + 7 * 24 * 60 * 60 * 1000;
     const upcomingDeadlines = openTasksAll
       .filter((t: any) => {
-        const deadline = new Date(t.deadline).getTime();
+        const deadline = parseTaskDeadline(t.deadline).getTime();
         return deadline >= Date.now() && deadline <= weekAhead;
       })
-      .sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      .sort((a: any, b: any) => parseTaskDeadline(a.deadline).getTime() - parseTaskDeadline(b.deadline).getTime())
       .slice(0, 5);
 
     return {

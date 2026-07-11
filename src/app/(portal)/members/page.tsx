@@ -7,7 +7,7 @@ export default async function MembersPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const members = await getActiveMembers();
+  const members = await getActiveMembers(user);
 
   return <MembersClient initialMembers={members} />;
 }

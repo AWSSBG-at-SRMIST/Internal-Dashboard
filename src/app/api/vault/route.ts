@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { db, TABLE, ScanCommand, PutCommand } from '@/lib/dynamodb';
+import { db, TABLE, PutCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { canCreateVaultEntry, canViewVaultEntry, canManageVaultEntry } from '@/lib/permissions';
-import { resolveVaultShares } from '@/lib/vault';
+import { canCreateVaultEntry } from '@/lib/permissions';
+import { getVisibleVaultEntries, resolveVaultShares } from '@/lib/vault';
 import { encryptVaultValue } from '@/lib/vault-crypto';
 import { randomUUID } from 'crypto';
 import type { VaultEntry } from '@/types';
@@ -17,26 +17,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const result = await db.send(new ScanCommand({ TableName: TABLE.VAULT }));
-    const entries = (result.Items || []) as VaultEntry[];
-
-    const visible = entries.filter(e => canViewVaultEntry(user, e));
-    visible.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    // Metadata only — the encrypted value never appears in the list response.
-    const summaries = visible.map(e => ({
-      entryId: e.entryId,
-      title: e.title,
-      notes: e.notes,
-      createdBy: e.createdBy,
-      createdByName: e.createdByName,
-      createdByRole: e.createdByRole,
-      createdAt: e.createdAt,
-      updatedAt: e.updatedAt,
-      sharedWith: e.sharedWith,
-      canManage: canManageVaultEntry(user, e),
-    }));
-
+    const summaries = await getVisibleVaultEntries(user);
     return NextResponse.json({ success: true, data: summaries });
   } catch (error) {
     console.error('List vault entries error:', error);

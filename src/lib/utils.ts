@@ -5,6 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Deadlines are stored as timezone-naive local strings ("YYYY-MM-DDTHH:mm",
+// built from the IST-assumed date/time picker in tasks/new) with no offset —
+// `new Date(deadline)` parses that as the *runtime's own* local time, which is
+// UTC on Vercel's Node serverless functions, silently shifting every deadline
+// 5.5h later than the IST time the creator actually picked. Anchoring the
+// missing offset to IST here keeps every downstream comparison (auto-close,
+// rating boundaries, reminders) correct regardless of which timezone the code
+// happens to execute in.
+export function parseTaskDeadline(deadline: string): Date {
+  const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(deadline);
+  return new Date(hasOffset ? deadline : `${deadline}+05:30`);
+}
+
 export function formatDate(date: string | Date) {
   return new Date(date).toLocaleDateString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -30,6 +43,12 @@ export function timeAgo(date: string | Date) {
   if (hours > 0) return `${hours}h ago`;
   if (minutes > 0) return `${minutes}m ago`;
   return 'just now';
+}
+
+// en-CA formats as YYYY-MM-DD, which also happens to sort correctly as a
+// plain string — exactly what date-range/day-bucket comparisons rely on.
+export function getISTDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
 }
 
 export function getGreeting(): string {
@@ -175,11 +194,11 @@ export function getStarColor(stars: number): string {
 }
 
 export function isDeadlinePassed(deadline: string): boolean {
-  return new Date(deadline) < new Date();
+  return parseTaskDeadline(deadline) < new Date();
 }
 
 export function hoursFromDeadline(submittedAt: string, deadline: string): number {
   const sub = new Date(submittedAt).getTime();
-  const dead = new Date(deadline).getTime();
+  const dead = parseTaskDeadline(deadline).getTime();
   return (sub - dead) / (1000 * 60 * 60);
 }

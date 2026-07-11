@@ -1,4 +1,5 @@
 import { db, TABLE, UpdateCommand, TransactWriteCommand, QueryCommand } from './dynamodb';
+import { parseTaskDeadline } from './utils';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 
 type TransactItems = NonNullable<TransactWriteCommandInput['TransactItems']>;
@@ -10,7 +11,7 @@ export function calculateRating(
   submittedAt: string,
   deadline: string,
 ): { delta: number; late: boolean } {
-  const diffHours = (new Date(submittedAt).getTime() - new Date(deadline).getTime()) / (1000 * 60 * 60);
+  const diffHours = (new Date(submittedAt).getTime() - parseTaskDeadline(deadline).getTime()) / (1000 * 60 * 60);
   const late = diffHours > 0;
 
   let delta: number;
@@ -229,7 +230,7 @@ export function getRatingLabel(stars: number): string {
 }
 
 export function getSubmissionTimingLabel(submittedAt: string, deadline: string): string {
-  const diffHours = (new Date(submittedAt).getTime() - new Date(deadline).getTime()) / (1000 * 60 * 60);
+  const diffHours = (new Date(submittedAt).getTime() - parseTaskDeadline(deadline).getTime()) / (1000 * 60 * 60);
   if (diffHours < -24) return 'Early (>24h before)';
   if (diffHours <= 0)  return 'On time (<24h before)';
   return 'Late (within grace period)';
