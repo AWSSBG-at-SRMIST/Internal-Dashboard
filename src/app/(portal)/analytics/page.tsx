@@ -7,7 +7,7 @@ import AnalyticsCharts from './AnalyticsCharts';
 export default async function AnalyticsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
-  if (!isPresidium(user) && user.role !== 'DIRECTOR') redirect('/dashboard');
+  if (!isPresidium(user)) redirect('/dashboard');
 
   const analytics = await getAnalyticsData();
 

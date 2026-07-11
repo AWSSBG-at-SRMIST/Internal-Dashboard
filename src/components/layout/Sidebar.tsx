@@ -28,13 +28,16 @@ const navItems: NavItem[] = [
   { label: 'Minutes of Meeting', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
   // Sponsorship & Finance only (Manager/Associate/Builder all included).
   { label: 'Sponsorship Outreach', href: '/sponsorship-outreach', icon: <Mail size={18} />, visible: canAccessSponsorshipMail },
-  { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR'] },
+  // Director-tier (Presidium always sees it too): Presidium/Directors always;
+  // Managers/Associates only once something's been shared with them
+  // (showVault is precomputed server-side in PortalLayout since it depends
+  // on vault data, not just the user's role).
+  { label: 'Vault', href: '/vault', icon: <Lock size={18} />, visible: (_user, flags) => flags.showVault },
+  // Presidium-only tier, grouped together at the end so the list reads as
+  // increasingly restricted rather than interleaving privilege levels.
+  { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Member Activity', href: '/activity', icon: <Activity size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
-  // Presidium/Directors always; Managers/Associates only once something's
-  // been shared with them (showVault is precomputed server-side in
-  // PortalLayout since it depends on vault data, not just the user's role).
-  { label: 'Vault', href: '/vault', icon: <Lock size={18} />, visible: (_user, flags) => flags.showVault },
   { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 
