@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { getCurrentUser } from '@/lib/auth';
 import { hasVaultAccess } from '@/lib/vault';
 import { Sidebar } from '@/components/layout/Sidebar';
+import HeartbeatTracker from '@/components/layout/HeartbeatTracker';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -14,5 +15,10 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const showVault = await hasVaultAccess(user);
 
-  return <Sidebar user={user} showVault={showVault}>{children}</Sidebar>;
+  return (
+    <>
+      <HeartbeatTracker />
+      <Sidebar user={user} showVault={showVault}>{children}</Sidebar>
+    </>
+  );
 }

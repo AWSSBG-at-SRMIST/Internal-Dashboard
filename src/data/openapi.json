@@ -592,22 +592,6 @@
         }
       }
     },
-    "/submissions": {
-      "get": {
-        "tags": ["Submissions"],
-        "summary": "List submissions",
-        "description": "Without `memberId`: presidium see all, directors see their domain, managers see their domain+subdomain, others get 403. With `memberId`: callers may always fetch their own; viewing another member's submissions requires the same scoped reviewer rights.",
-        "parameters": [
-          { "name": "memberId", "in": "query", "schema": { "type": "string" } }
-        ],
-        "responses": {
-          "200": { "description": "Submission list", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/Submission" } } } } } } },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "description": "Target member not found" }
-        }
-      }
-    },
     "/links": {
       "get": {
         "tags": ["Links"],

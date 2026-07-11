@@ -2,7 +2,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, ScanCommand, QueryCommand } from '@/lib/dynamodb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckSquare, Users, Link2, TrendingUp, Clock, Star } from 'lucide-react';
+import { CheckSquare, Users, Link2, TrendingUp, Clock, Star, CalendarClock } from 'lucide-react';
 import { formatDateTime, getRoleColor, getDomainColor, getSubdomainColor, getAssignmentTypeColor, getAssignmentScopeLabel, getGreeting, timeAgo, formatRole } from '@/lib/utils';
 import { isTaskVisible, getTaskRelationship } from '@/lib/permissions';
 import type { SessionUser, Domain, Subdomain } from '@/types';
@@ -24,7 +24,7 @@ async function getDashboardStats(user: SessionUser) {
     const [tasksRes, submissionsRes, linksRes, mySubmissions] = await Promise.all([
       db.send(new ScanCommand({ TableName: TABLE.TASKS })),
       db.send(new ScanCommand({ TableName: TABLE.SUBMISSIONS })),
-      db.send(new ScanCommand({ TableName: TABLE.LINKS, Select: 'COUNT' })),
+      db.send(new ScanCommand({ TableName: TABLE.LINKS, ProjectionExpression: 'createdAt' })),
       db.send(new QueryCommand({
         TableName: TABLE.SUBMISSIONS,
         IndexName: 'MemberIndex',
@@ -46,18 +46,46 @@ async function getDashboardStats(user: SessionUser) {
     const myTasks = (isBuilder ? openTasksAll : openTasksAll.filter((t: any) => isMyTask(user, t))).slice(0, 5);
     const teamTasks = isBuilder ? [] : openTasksAll.filter((t: any) => !isMyTask(user, t)).slice(0, 5);
 
-    const visibleSubmissionsCount = (submissionsRes.Items || []).filter((s: any) => visibleTaskIds.has(s.taskId)).length;
+    const visibleSubmissions = (submissionsRes.Items || []).filter((s: any) => visibleTaskIds.has(s.taskId));
+    const links = linksRes.Items || [];
+
+    // "+N this week" deltas — a simple point-in-time count, not a true
+    // historical snapshot (this app doesn't keep one), but still useful as a
+    // sense of recent activity.
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const tasksThisWeek = visibleTasks.filter((t: any) => new Date(t.createdAt).getTime() >= weekAgo).length;
+    const submissionsThisWeek = visibleSubmissions.filter((s: any) => new Date(s.submittedAt).getTime() >= weekAgo).length;
+    const linksThisWeek = links.filter((l: any) => new Date(l.createdAt).getTime() >= weekAgo).length;
+
+    // Open tasks (visible to me) with a deadline in the next 7 days —
+    // regardless of whether I can submit or am just overseeing them.
+    const weekAhead = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const upcomingDeadlines = openTasksAll
+      .filter((t: any) => {
+        const deadline = new Date(t.deadline).getTime();
+        return deadline >= Date.now() && deadline <= weekAhead;
+      })
+      .sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      .slice(0, 5);
 
     return {
       totalTasks: visibleTasks.length,
-      totalSubmissions: visibleSubmissionsCount,
-      totalLinks: linksRes.Count || 0,
+      totalSubmissions: visibleSubmissions.length,
+      totalLinks: links.length,
+      tasksThisWeek,
+      submissionsThisWeek,
+      linksThisWeek,
       myTasks,
       teamTasks,
       myRecentSubmissions: mySubmissions.Items || [],
+      upcomingDeadlines,
     };
   } catch (e) {
-    return { totalTasks: 0, totalSubmissions: 0, totalLinks: 0, myTasks: [], teamTasks: [], myRecentSubmissions: [] };
+    return {
+      totalTasks: 0, totalSubmissions: 0, totalLinks: 0,
+      tasksThisWeek: 0, submissionsThisWeek: 0, linksThisWeek: 0,
+      myTasks: [], teamTasks: [], myRecentSubmissions: [], upcomingDeadlines: [],
+    };
   }
 }
 
@@ -68,9 +96,9 @@ export default async function DashboardPage() {
   const stats = await getDashboardStats(user);
 
   const statCards = [
-    { label: 'Active Tasks', value: stats.totalTasks, icon: <CheckSquare size={20} />, color: 'text-[#FF9900]', bg: 'bg-[#FF9900]/10 border border-[#FF9900]/20', href: '/tasks' },
-    { label: 'Submissions', value: stats.totalSubmissions, icon: <TrendingUp size={20} />, color: 'text-green-400', bg: 'bg-green-400/10 border border-green-400/20', href: '/tasks' },
-    { label: 'Short Links', value: stats.totalLinks, icon: <Link2 size={20} />, color: 'text-purple-400', bg: 'bg-purple-400/10 border border-purple-400/20', href: '/links' },
+    { label: 'Active Tasks', value: stats.totalTasks, delta: stats.tasksThisWeek, icon: <CheckSquare size={20} />, color: 'text-[#FF9900]', bg: 'bg-[#FF9900]/10 border border-[#FF9900]/20', href: '/tasks' },
+    { label: 'Submissions', value: stats.totalSubmissions, delta: stats.submissionsThisWeek, icon: <TrendingUp size={20} />, color: 'text-green-400', bg: 'bg-green-400/10 border border-green-400/20', href: '/tasks' },
+    { label: 'Short Links', value: stats.totalLinks, delta: stats.linksThisWeek, icon: <Link2 size={20} />, color: 'text-purple-400', bg: 'bg-purple-400/10 border border-purple-400/20', href: '/links' },
   ];
 
   const isBuilder = user.role === 'BUILDER';
@@ -97,6 +125,9 @@ export default async function DashboardPage() {
                 <div>
                   <p className="text-xs text-[#666] font-bold uppercase tracking-widest">{card.label}</p>
                   <p className="text-3xl font-bold text-[#f0f0f0] mt-1">{card.value}</p>
+                  {card.delta > 0 && (
+                    <p className="text-xs text-green-400 mt-1 font-mono">+{card.delta} this week</p>
+                  )}
                 </div>
                 <div className={`${card.bg} ${card.color} p-3 transition-all`}>
                   {card.icon}
@@ -106,6 +137,33 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Upcoming Deadlines */}
+      {stats.upcomingDeadlines.length > 0 && (
+        <Card className="border-orange-500/30 bg-orange-500/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <CalendarClock size={16} className="text-orange-400" />
+              <CardTitle className="text-base">Deadlines This Week</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {stats.upcomingDeadlines.map((task: any) => (
+                <Link href={`/tasks/${task.taskId}`} key={task.taskId} className="block overflow-hidden">
+                  <div className="flex items-center gap-2 p-3 hover:bg-[#1a1a1a] transition-colors border-2 border-[#2d2d2d] overflow-hidden">
+                    <Clock size={14} className="text-orange-400 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#f0f0f0] truncate">{task.title}</p>
+                      <p className="text-xs text-orange-300 font-mono">Due {formatDateTime(task.deadline)}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className={isBuilder ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'grid grid-cols-1 lg:grid-cols-3 gap-6'}>
         {/* My Tasks */}

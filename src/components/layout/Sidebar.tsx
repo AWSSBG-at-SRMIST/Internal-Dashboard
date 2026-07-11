@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download, Lock
+  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
 import { canGenerateMoM } from '@/lib/permissions';
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Minutes of Meeting', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
+  { label: 'Member Activity', href: '/activity', icon: <Activity size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   // Presidium/Directors always; Managers/Associates only once something's
   // been shared with them (showVault is precomputed server-side in
   // PortalLayout since it depends on vault data, not just the user's role).

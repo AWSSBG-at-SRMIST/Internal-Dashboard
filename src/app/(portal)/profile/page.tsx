@@ -6,6 +6,7 @@ import { getRoleColor, getDomainColor, getSubdomainColor, getStarColor, formatDa
 import { getSubmissionTimingLabel } from '@/lib/ratings';
 import { isPresidium } from '@/lib/permissions';
 import { Mail } from 'lucide-react';
+import EditContactDialog from './EditContactDialog';
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
@@ -47,6 +48,18 @@ export default async function ProfilePage() {
               <div className="flex items-center gap-2 mt-3 text-sm text-[#888]">
                 <Mail size={14} className="text-[#555]" />
                 <span className="font-mono">{user.email}</span>
+              </div>
+              <div className="mt-4">
+                <EditContactDialog
+                  memberId={user.memberId}
+                  initial={{
+                    phone: member?.phone || '',
+                    personalEmail: member?.personalEmail || '',
+                    github: member?.github || '',
+                    linkedin: member?.linkedin || '',
+                    meetup: member?.meetup || '',
+                  }}
+                />
               </div>
             </div>
             {!presidium && (

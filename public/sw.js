@@ -1,5 +1,5 @@
-const CACHE = 'awssbg-v1';
-const STATIC = ['/manifest.json', '/logo.png', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
+const CACHE = 'awssbg-v2';
+const STATIC = ['/manifest.json', '/logo.png', '/icons/icon-192x192.png', '/icons/icon-512x512.png', '/offline.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
@@ -27,7 +27,17 @@ self.addEventListener('fetch', e => {
         caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() =>
+        caches.match(e.request).then(cached => {
+          if (cached) return cached;
+          // No network, and this exact page was never cached — for a page
+          // navigation, show the offline fallback instead of the browser's
+          // default connection-error screen. Non-navigation requests (e.g.
+          // a background image fetch) just fail as before.
+          if (e.request.mode === 'navigate') return caches.match('/offline.html');
+          return undefined;
+        })
+      )
   );
 });
 

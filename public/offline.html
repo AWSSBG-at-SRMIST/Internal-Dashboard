@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — Internal Dashboard</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #050505;
+      color: #f0f0f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .wrap {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+    .icon {
+      width: 56px;
+      height: 56px;
+      border: 2px solid #2d2d2d;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 26px;
+    }
+    h1 {
+      font-size: 18px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin: 0 0 8px;
+      color: #f0f0f0;
+    }
+    p {
+      color: #888;
+      font-size: 14px;
+      margin: 0 0 24px;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    button {
+      background: #FF9900;
+      color: #050505;
+      border: none;
+      font-weight: bold;
+      font-family: inherit;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    button:hover { background: #ffaa22; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="icon">📡</div>
+    <h1>You're offline</h1>
+    <p>Internal Dashboard needs a network connection. Pages you've already visited may still work — try going back, or reconnect and retry.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>

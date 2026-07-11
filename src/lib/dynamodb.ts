@@ -24,6 +24,7 @@ export const TABLE = {
   AUDIT_LOGS: 'sbg-audit-logs',
   RATE_LIMITS: 'sbg-rate-limits',
   VAULT: 'sbg-vault-entries',
+  ACTIVITY: 'sbg-activity-daily',
 } as const;
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand, BatchWriteCommand, TransactWriteCommand };

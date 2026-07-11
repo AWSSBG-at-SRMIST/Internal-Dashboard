@@ -185,11 +185,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       const d = await res.json();
       if (d.success) {
         const ELIGIBLE_ROLES = ['DIRECTOR', 'MANAGER', 'ASSOCIATE'];
+        // Org-wide tasks also allow delegating to HR & Admin's Builders.
+        const isOrgWide = data.task.assignmentType === 'ORG_WIDE';
         setDelegateMembers(
           (d.data as any[])
             .filter(m =>
               m.isActive &&
-              ELIGIBLE_ROLES.includes(m.role) &&
+              (ELIGIBLE_ROLES.includes(m.role) || (isOrgWide && m.role === 'BUILDER' && m.subdomain === 'HR & Admin')) &&
               // Directors see only their own domain; presidium see everyone
               (delegateFilter === 'ANY' || m.domain === delegateFilter)
             )
@@ -341,7 +343,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
               <CardTitle className="text-base flex items-center gap-2">
                 <UserPlus size={15} /> Delegated Reviewers
               </CardTitle>
-              {canDelegate && (task.delegatedReviewers?.length ?? 0) < 2 && (
+              {canDelegate && (
                 <Button size="sm" variant="outline" onClick={openDelegateModal} disabled={savingDelegate}>
                   <Plus size={13} /> Add
                 </Button>

@@ -159,8 +159,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       if (!isPresidium(user) && !isDirectorOwner) {
         return NextResponse.json({ error: 'Only Presidium or the task creator (Director) can manage delegates' }, { status: 403 });
       }
-      if (!Array.isArray(delegatedReviewers) || delegatedReviewers.length > 2) {
-        return NextResponse.json({ error: 'Maximum 2 delegates allowed' }, { status: 400 });
+      if (!Array.isArray(delegatedReviewers)) {
+        return NextResponse.json({ error: 'Invalid delegatedReviewers' }, { status: 400 });
       }
       // Validate each proposed delegate entry
       const uniqueIds = new Set<string>();
