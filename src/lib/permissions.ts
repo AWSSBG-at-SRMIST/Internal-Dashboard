@@ -79,6 +79,17 @@ export function canUseLinkShortener(actor: SessionUser): boolean {
   return actor.role !== 'BUILDER';
 }
 
+// Presidium always; the Corporate Director specifically (Sponsorship &
+// Finance sits under Corporate); and every role within Sponsorship &
+// Finance itself (Manager, Associate, and Builder alike — Builders included
+// on purpose, since they're the ones actually doing the outreach calls,
+// even though they never get direct access to the sponsorship inbox/Drive).
+export function canAccessSponsorshipMail(actor: SessionUser): boolean {
+  if (isPresidium(actor)) return true;
+  if (actor.role === 'DIRECTOR' && actor.domain === 'Corporate') return true;
+  return actor.subdomain === 'Sponsorship & Finance';
+}
+
 // Validates whether the actor can create a task with the given scope + domain/subdomain/assignedToId.
 // Returns an error string on failure, null on success.
 export function canCreateScope(

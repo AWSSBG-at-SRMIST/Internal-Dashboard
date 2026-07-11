@@ -4,10 +4,10 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity
+  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
-import { canGenerateMoM } from '@/lib/permissions';
+import { canGenerateMoM, canAccessSponsorshipMail } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 import { useState } from 'react';
 
@@ -26,6 +26,8 @@ const navItems: NavItem[] = [
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
   { label: 'Minutes of Meeting', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
+  // Sponsorship & Finance only (Manager/Associate/Builder all included).
+  { label: 'Sponsorship Outreach', href: '/sponsorship-outreach', icon: <Mail size={18} />, visible: canAccessSponsorshipMail },
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Member Activity', href: '/activity', icon: <Activity size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
