@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     }
 
     await logAction(
-      SYSTEM_ACTOR, 'SEND_TASK_REMINDERS', 'TASK', 'BATCH',
+      SYSTEM_ACTOR, 'SEND_TASK_REMINDERS', 'SYSTEM', 'BATCH',
       `Reminder cron: ${dueSoonTasks.length} task(s) due within ${hoursBefore}h, ${emailsSent} email(s) sent`
     );
 

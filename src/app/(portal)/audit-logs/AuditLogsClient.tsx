@@ -35,10 +35,15 @@ const ACTION_COLORS: Record<string, string> = {
   GENERATE_MOM:       'bg-violet-500/20 text-violet-300',
   AUTO_CLOSE_TASK:    'bg-rose-500/20 text-rose-300',
   SEND_TASK_REMINDERS:'bg-[#2a2a2a] text-[#aaa]',
+  CREATE_VAULT_ENTRY: 'bg-green-500/20 text-green-300',
+  VIEW_VAULT_ENTRY:   'bg-sky-500/20 text-sky-300',
+  UPDATE_VAULT_ENTRY: 'bg-yellow-500/20 text-yellow-300',
+  DELETE_VAULT_ENTRY: 'bg-rose-500/20 text-rose-300',
+  SYSTEM_RESET:       'bg-red-600/30 text-red-300',
 };
 
 const ALL_ACTIONS = Object.keys(ACTION_COLORS);
-const ALL_TARGET_TYPES = ['MEMBER', 'TASK', 'SUBMISSION', 'LINK', 'SYSTEM'];
+const ALL_TARGET_TYPES = ['MEMBER', 'TASK', 'SUBMISSION', 'LINK', 'VAULT', 'MOM', 'AUDIT_LOG', 'SYSTEM'];
 
 export default function AuditLogsClient({ initialLogs }: { initialLogs: AuditLog[] }) {
   const [logs, setLogs] = useState<AuditLog[]>(initialLogs);

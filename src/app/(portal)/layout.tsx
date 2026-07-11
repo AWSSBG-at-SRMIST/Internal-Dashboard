@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { getCurrentUser } from '@/lib/auth';
+import { hasVaultAccess } from '@/lib/vault';
 import { Sidebar } from '@/components/layout/Sidebar';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -11,5 +12,7 @@ export default async function PortalLayout({ children }: { children: React.React
     redirect(`/login?next=${encodeURIComponent(pathname)}`);
   }
 
-  return <Sidebar user={user}>{children}</Sidebar>;
+  const showVault = await hasVaultAccess(user);
+
+  return <Sidebar user={user} showVault={showVault}>{children}</Sidebar>;
 }

@@ -147,6 +147,44 @@ export interface ShortLink {
   clicks: number;
 }
 
+// Vault entries are created only by Presidium or Directors. Default
+// visibility is the creator + Presidium (always); `sharedWith` extends that
+// to specific Managers/Associates (or Directors, if a Presidium member
+// shared it) the creator has explicitly granted access to. Builders never
+// participate in the vault, neither as creators nor as share recipients.
+export interface VaultShareEntry {
+  memberId: string;
+  memberName: string;
+  role: Role;
+  domain: Domain | null;
+}
+
+export interface VaultEntry {
+  entryId: string;
+  title: string;
+  notes: string;
+  // AES-256-GCM ciphertext + the IV/auth tag needed to decrypt it, all
+  // base64-encoded. Never sent to the client except from the single-entry
+  // "reveal" endpoint, and never decrypted server-side except there.
+  encryptedValue: string;
+  iv: string;
+  authTag: string;
+  createdBy: string;
+  createdByName: string;
+  createdByRole: Role;
+  createdAt: string;
+  updatedAt: string;
+  sharedWith: VaultShareEntry[];
+}
+
+// What the list endpoint returns — everything except the encrypted value
+// itself (so a plain "browse the vault" request can never leak ciphertext),
+// plus a viewer-relative `canManage` so the UI knows whether to show
+// edit/delete/share controls without a second round-trip.
+export type VaultEntrySummary = Omit<VaultEntry, 'encryptedValue' | 'iv' | 'authTag'> & {
+  canManage: boolean;
+};
+
 export interface AuditLog {
   logId: string;
   action: string;

@@ -141,6 +141,51 @@ export function canAssignToMember(
   return actor.domain === target.domain && actor.subdomain === target.subdomain;
 }
 
+// Vault: only Presidium/Directors can create entries. Default visibility is
+// creator + Presidium (always); `sharedWith` extends that to specific
+// Managers/Associates (or Directors, if Presidium shared it). Builders never
+// participate — not as creators, not as share recipients.
+export function canCreateVaultEntry(actor: SessionUser): boolean {
+  return isPresidium(actor) || actor.role === 'DIRECTOR';
+}
+
+export function canViewVaultEntry(
+  actor: SessionUser,
+  entry: { createdBy: string; sharedWith: Array<{ memberId: string }> },
+): boolean {
+  if (isPresidium(actor)) return true;
+  if (entry.createdBy === actor.memberId) return true;
+  return entry.sharedWith.some(s => s.memberId === actor.memberId);
+}
+
+// Only the creator (or Presidium) may edit/delete/reshare an entry — a share
+// recipient can view it but never modify the share list themselves, so
+// access can't silently sprawl beyond who the owner intended.
+export function canManageVaultEntry(
+  actor: SessionUser,
+  entry: { createdBy: string },
+): boolean {
+  return isPresidium(actor) || entry.createdBy === actor.memberId;
+}
+
+// Who a given creator is allowed to add to an entry's share list. Presidium
+// can share to any Director/Manager/Associate; a Director can only share to
+// Managers/Associates within their own domain. Everyone else returns
+// nothing, since only Presidium/Directors ever create (and therefore share)
+// vault entries in the first place.
+export function getShareableMembers<T extends Pick<Member, 'memberId' | 'role' | 'domain'>>(
+  sharer: SessionUser,
+  members: T[],
+): T[] {
+  if (isPresidium(sharer)) {
+    return members.filter(m => m.role === 'DIRECTOR' || m.role === 'MANAGER' || m.role === 'ASSOCIATE');
+  }
+  if (sharer.role === 'DIRECTOR') {
+    return members.filter(m => (m.role === 'MANAGER' || m.role === 'ASSOCIATE') && m.domain === sharer.domain);
+  }
+  return [];
+}
+
 // Single source of truth for a user's relationship to a task.
 // Returns CAN_SUBMIT, VISIBLE_ONLY (oversight without submission rights), or HIDDEN.
 // Handles both new scopes and legacy assignment types from old DynamoDB records.

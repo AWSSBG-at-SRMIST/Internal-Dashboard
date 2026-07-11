@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download
+  FileText, NotebookPen, LogOut, Menu, X, Download, Lock
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
 import { canGenerateMoM } from '@/lib/permissions';
@@ -16,18 +16,22 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   roles?: string[];
-  visible?: (user: SessionUser) => boolean;
+  visible?: (user: SessionUser, flags: { showVault: boolean }) => boolean;
 }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} /> },
   { label: 'Tasks', href: '/tasks', icon: <CheckSquare size={18} /> },
   { label: 'Members', href: '/members', icon: <Users size={18} /> },
+  { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
   { label: 'Minutes of Meeting', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
-  { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
+  // Presidium/Directors always; Managers/Associates only once something's
+  // been shared with them (showVault is precomputed server-side in
+  // PortalLayout since it depends on vault data, not just the user's role).
+  { label: 'Vault', href: '/vault', icon: <Lock size={18} />, visible: (_user, flags) => flags.showVault },
   { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 
@@ -91,15 +95,16 @@ function NavPanel({ user, visibleItems, pathname, onNavigate, onLogout }: {
 
 interface SidebarProps {
   user: SessionUser;
+  showVault: boolean;
   children: React.ReactNode;
 }
 
-export function Sidebar({ user, children }: SidebarProps) {
+export function Sidebar({ user, showVault, children }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleItems = navItems.filter(item =>
-    item.visible ? item.visible(user) : !item.roles || item.roles.includes(user.role)
+    item.visible ? item.visible(user, { showVault }) : !item.roles || item.roles.includes(user.role)
   );
   const closeMobile = () => setMobileOpen(false);
 
@@ -150,9 +155,11 @@ export function Sidebar({ user, children }: SidebarProps) {
           <p className="text-white font-bold text-sm truncate uppercase tracking-wide">Internal Dashboard</p>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-6 min-w-0 overscroll-contain">
-          {children}
-          <footer className="border-t border-[#2d2d2d] mt-6 py-2.5">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 overscroll-contain flex flex-col">
+          <div className="flex-1 p-4 lg:p-6">
+            {children}
+          </div>
+          <footer className="border-t border-[#2d2d2d] py-2.5 px-4 lg:px-6">
             <p className="text-[10px] text-[#f0f0f0] font-mono text-center tracking-wide">
               Made with ♥ by Tech Team for AWS SBG at SRMIST &nbsp;·&nbsp; Strictly for internal use only.
             </p>
