@@ -195,7 +195,7 @@ export default function NewTaskPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
       <div className="flex items-center gap-4">
         <Link href="/tasks"><Button variant="ghost" size="icon"><ArrowLeft size={18} /></Button></Link>
         <div>
