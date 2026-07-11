@@ -74,7 +74,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
       && (!mySubmission || mySubmission.reviewStatus === 'REJECTED' || mySubmission.reviewStatus === 'REVISION_REQUESTED')
       && canSubmitTask(user, taskResult.Item as any);
     const canDelete = isPresidium(user) || taskResult.Item.createdBy === user.memberId;
-    const canClose = canReview || taskResult.Item.createdBy === user.memberId;
     const canEdit = taskResult.Item.createdBy === user.memberId || canReview;
     // Presidium can delegate on any task; directors can delegate only on their own tasks.
     const canDelegate = isPresidium(user) || (user.role === 'DIRECTOR' && taskResult.Item.createdBy === user.memberId);
@@ -105,7 +104,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
         canViewSubmissions,
         canSubmit,
         canDelete,
-        canClose,
         canEdit,
         canDelegate,
         delegateFilter,
@@ -127,11 +125,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
 
   try {
     const body = await req.json();
-    const { title, description, deadline, status, priority, delegatedReviewers } = body;
+    const { title, description, deadline, priority, delegatedReviewers } = body;
 
-    if (status !== undefined && !['OPEN', 'CLOSED'].includes(status)) {
-      return NextResponse.json({ error: 'Invalid status value' }, { status: 400 });
-    }
     if (priority !== undefined && !['LOW', 'MEDIUM', 'HIGH'].includes(priority)) {
       return NextResponse.json({ error: 'Invalid priority value' }, { status: 400 });
     }
@@ -154,8 +149,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       || (isPresidium(user) && taskCreatorIsPresidium)
       || hasHierarchicalReviewAccess(user, task.Item as any);
 
-    // Mirrors GET's canClose (canReview || isCreator) — a reviewer who didn't
-    // create the task must still be able to close it, not just see the button.
+    // Mirrors GET's canEdit — only the creator or a reviewer may edit the task.
     if (!isCreator && !canReview) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -197,11 +191,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       }
     }
 
-    // Only reviewers (or the task creator) may close a task; regular creators
-    // who can't review cannot reopen a task either.
-    if (status === 'OPEN' && task.Item.status === 'CLOSED' && !canReview) {
-      return NextResponse.json({ error: 'Only reviewers can reopen a closed task' }, { status: 403 });
-    }
+    // There's no manual close/reopen action anymore — status only ever
+    // changes automatically (deadline passing, COLLECTIVE approval) or
+    // implicitly here when the deadline is extended on a closed task (below).
 
     // The edit form always resends the deadline field even when the user
     // didn't touch it, so only treat it as an actual change (and trigger the
@@ -212,14 +204,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
       && new Date(deadline).getTime() !== new Date(task.Item.deadline).getTime();
 
     // Extending the deadline on a closed task is only ever done to give it a
-    // fresh shot — reopen it implicitly unless the caller is separately
-    // setting status explicitly. If the task had already taken the
+    // fresh shot — reopen it implicitly. If the task had already taken the
     // no-submission penalty, that verdict was against the old deadline and no
     // longer holds, so reverse it and let auto-close re-evaluate fresh.
     const hadNoSubmissionPenalty = !!task.Item.noSubmissionPenaltyAt;
-    const isReopeningViaDeadlineExtend =
-      deadlineChanged && status === undefined && task.Item.status === 'CLOSED';
-    const effectiveStatus = isReopeningViaDeadlineExtend ? 'OPEN' : status;
+    const isReopeningViaDeadlineExtend = deadlineChanged && task.Item.status === 'CLOSED';
+    const effectiveStatus = isReopeningViaDeadlineExtend ? 'OPEN' : undefined;
 
     if (deadlineChanged && hadNoSubmissionPenalty) {
       await reverseNoSubmissionPenalty(task.Item as any);

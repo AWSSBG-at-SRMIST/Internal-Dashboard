@@ -31,7 +31,6 @@ interface TaskDetailData {
   canViewSubmissions: boolean;
   canSubmit: boolean;
   canDelete: boolean;
-  canClose: boolean;
   canEdit: boolean;
   canDelegate: boolean;
   delegateFilter: string; // 'ANY' for presidium, domain string for directors
@@ -51,9 +50,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   const [links, setLinks] = useState<string[]>(['']);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>({});
-  const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [closing, setClosing] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
   const [saving, setSaving] = useState(false);
@@ -130,18 +127,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       fetchTask();
     } catch { toast.error('Failed to review submission'); setData(prevData); }
     finally { setReviewing(null); }
-  }
-
-  async function closeTask() {
-    setClosing(true);
-    try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...(data?.task), status: 'CLOSED' }),
-      });
-      if ((await res.json()).success) { toast.success('Task closed'); setConfirmClose(false); fetchTask(); }
-    } finally { setClosing(false); }
   }
 
   async function deleteTask() {
@@ -263,7 +248,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   );
   if (!data) return null;
 
-  const { task, submissions, mySubmission, canReview, canViewSubmissions, canSubmit, canDelete, canClose, canEdit, canDelegate, delegateFilter, hierarchyReviewers, collectiveLockedBy } = data;
+  const { task, submissions, mySubmission, canReview, canViewSubmissions, canSubmit, canDelete, canEdit, canDelegate, delegateFilter, hierarchyReviewers, collectiveLockedBy } = data;
   const overdue = isDeadlinePassed(task.deadline);
 
   return (
@@ -303,18 +288,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                 </span>
               </div>
             </div>
-            {(canEdit || canClose && task.status === 'OPEN' || canDelete) && (
+            {(canEdit || canDelete) && (
               <div className="flex gap-2 flex-shrink-0">
                 {canEdit && (
                   <Button variant="outline" size="sm" onClick={openEdit}>
                     <Pencil size={14} />
                     <span className="hidden sm:inline">Edit</span>
-                  </Button>
-                )}
-                {canClose && task.status === 'OPEN' && (
-                  <Button variant="outline" size="sm" onClick={() => setConfirmClose(true)}>
-                    <span className="hidden sm:inline">Close Task</span>
-                    <span className="sm:hidden">Close</span>
                   </Button>
                 )}
                 {canDelete && (
@@ -675,19 +654,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       )}
 
       <ConfirmDialog
-        open={confirmClose}
-        onOpenChange={setConfirmClose}
-        title="Close this task?"
-        description="No new submissions will be accepted once it's closed."
-        confirmLabel="Close Task"
-        loading={closing}
-        onConfirm={closeTask}
-      />
-      <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this task permanently?"
-        description="All submissions for it will remain orphaned. This cannot be undone."
+        description="All of its submissions will be deleted too, and any stars they earned will be reversed. This cannot be undone."
         confirmLabel="Delete"
         destructive
         loading={deleting}

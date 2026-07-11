@@ -182,9 +182,8 @@
         "properties": {
           "title": { "type": "string" },
           "description": { "type": "string" },
-          "deadline": { "type": "string", "format": "date-time", "description": "Changing this clears reminderSentAt so a new reminder cycle can fire" },
-          "priority": { "$ref": "#/components/schemas/TaskPriority" },
-          "status": { "type": "string", "enum": ["OPEN", "CLOSED"] }
+          "deadline": { "type": "string", "format": "date-time", "description": "Changing this clears reminderSentAt so a new reminder cycle can fire. Extending the deadline on a closed task reopens it automatically. There is no manual status field — tasks only ever open/close automatically." },
+          "priority": { "$ref": "#/components/schemas/TaskPriority" }
         }
       },
       "TaskDetail": {
@@ -195,8 +194,7 @@
           "mySubmission": { "allOf": [{ "$ref": "#/components/schemas/Submission" }], "nullable": true },
           "canReview": { "type": "boolean" },
           "canSubmit": { "type": "boolean" },
-          "canDelete": { "type": "boolean" },
-          "canClose": { "type": "boolean" }
+          "canDelete": { "type": "boolean" }
         }
       },
       "Submission": {
