@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, invalidateSessionsForMember } from '@/lib/auth';
-import { db, TABLE, GetCommand, UpdateCommand } from '@/lib/dynamodb';
+import { db, TABLE, GetCommand, UpdateCommand, DeleteCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { isPresidium, canEditMembers, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
+import { upsertMemberRow, deleteMemberRow } from '@/lib/sheets';
+import type { Member } from '@/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const user = await getCurrentUser();
@@ -49,19 +51,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
       ? ['name', 'role', 'domain', 'subdomain', 'department', 'section', 'phone', 'whatsapp', 'github', 'linkedin', 'instagram', 'meetup', 'builderId', 'personalEmail', 'faName', 'faEmail', 'faPhone', 'isActive', 'clubId', 'regNo']
       : canEditMembers(user)
         ? ['name', 'department', 'section', 'phone', 'whatsapp', 'github', 'linkedin', 'instagram', 'meetup', 'builderId', 'personalEmail', 'faName', 'faEmail', 'faPhone', 'isActive', 'clubId', 'regNo']
-        : ['phone', 'github', 'linkedin', 'meetup', 'personalEmail'];
+        : ['phone', 'github', 'linkedin', 'instagram', 'meetup', 'builderId', 'personalEmail'];
 
-    // URL fields are rendered back as <a href> client-side, so a non-http(s)
-    // scheme (e.g. javascript:) would execute in the viewer's session — reject
-    // anything that doesn't parse as a plain http/https URL before it's stored.
-    const urlFields = ['github', 'linkedin', 'instagram', 'meetup', 'builderId'];
-    for (const field of urlFields) {
+    // These render back as <a href> links client-side (via toProfileLink,
+    // which prepends the right base URL for a bare handle like "aarohi1805").
+    // A bare handle has no scheme and is always safe; anything that DOES
+    // include a scheme must be http(s) — rejects javascript:/data: etc.
+    // before it's stored.
+    const handleOrUrlFields = ['github', 'linkedin', 'instagram', 'builderId'];
+    for (const field of handleOrUrlFields) {
       if (body[field] === undefined || body[field] === '') continue;
+      const value = String(body[field]).trim();
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(value)) continue; // bare handle, no scheme — fine
       try {
-        const parsed = new URL(body[field]);
+        const parsed = new URL(value);
         if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('bad protocol');
       } catch {
-        return NextResponse.json({ error: `${field} must be a valid http or https URL` }, { status: 400 });
+        return NextResponse.json({ error: `${field} must be a valid http/https URL or a plain handle` }, { status: 400 });
+      }
+    }
+    // Meetup doesn't have a clean handle format (meetup.com/members/<id>) —
+    // always require a proper http(s) URL for it.
+    if (body.meetup) {
+      try {
+        const parsed = new URL(body.meetup);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('bad protocol');
+      } catch {
+        return NextResponse.json({ error: 'meetup must be a valid http or https URL' }, { status: 400 });
       }
     }
     if (body.personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.personalEmail)) {
@@ -71,13 +87,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
       return NextResponse.json({ error: 'phone must be a valid phone number' }, { status: 400 });
     }
 
-    // Validate the role/domain/subdomain combination against what it'll
-    // actually be after this update — not just what's in the request body,
-    // since a partial update (e.g. only changing role) must be checked
-    // against the fields it's leaving untouched.
+    // Always fetch the current record first — needed both to validate the
+    // effective role/domain/subdomain (a partial update must be checked
+    // against the fields it's leaving untouched) and to capture the club ID
+    // as it stood before this update, in case it's being renamed (the Sheets
+    // sync below needs the old ID to find the row it must rename in place).
+    const current = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
+    if (!current.Item) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    const oldClubId: string | undefined = current.Item.clubId;
+
     if (allowedFields.includes('role') || allowedFields.includes('domain') || allowedFields.includes('subdomain')) {
-      const current = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
-      if (!current.Item) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
       const effectiveRole = body.role !== undefined ? body.role : current.Item.role;
       const effectiveDomain = body.domain !== undefined ? body.domain : current.Item.domain;
       const effectiveSubdomain = body.subdomain !== undefined ? body.subdomain : current.Item.subdomain;
@@ -131,6 +150,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
     }
 
     await logAction(user, 'UPDATE_MEMBER', 'MEMBER', memberId, `Updated fields: ${Object.keys(body).join(', ')}`);
+
+    const updated = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
+    if (updated.Item?.clubId) {
+      upsertMemberRow(updated.Item as Member, oldClubId).catch(console.error);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Update member error:', error);
@@ -140,26 +165,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ memb
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const user = await getCurrentUser();
-  if (!user || !isPresidium(user)) {
+  if (!user || !canEditMembers(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const { memberId } = await params;
 
   try {
-    // Soft delete: set isActive to false
-    await db.send(new UpdateCommand({
-      TableName: TABLE.MEMBERS,
-      Key: { memberId },
-      UpdateExpression: 'SET isActive = :false',
-      ExpressionAttributeValues: { ':false': false },
-    }));
-    // Force-logout the deactivated member by clearing all their sessions.
+    const existing = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
+    if (!existing.Item) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    const { name, clubId } = existing.Item;
+
+    // Permanent delete — submissions/tasks/audit logs keep their own
+    // denormalized name snapshots so history still displays correctly; only
+    // a "view profile" link to this memberId would 404 afterward.
+    await Promise.all([
+      db.send(new DeleteCommand({ TableName: TABLE.MEMBERS, Key: { memberId } })),
+      db.send(new DeleteCommand({ TableName: TABLE.RATINGS, Key: { memberId } })),
+    ]);
     await invalidateSessionsForMember(memberId).catch(console.error);
-    await logAction(user, 'DEACTIVATE_MEMBER', 'MEMBER', memberId, 'Member deactivated');
+    await logAction(user, 'DELETE_MEMBER', 'MEMBER', memberId, `Permanently deleted member: ${name}`);
+    if (clubId) deleteMemberRow(clubId).catch(console.error);
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Deactivate member error:', error);
-    return NextResponse.json({ error: 'Failed to deactivate member' }, { status: 500 });
+    console.error('Delete member error:', error);
+    return NextResponse.json({ error: 'Failed to delete member' }, { status: 500 });
   }
 }

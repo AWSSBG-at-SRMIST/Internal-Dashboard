@@ -202,3 +202,32 @@ export function hoursFromDeadline(submittedAt: string, deadline: string): number
   const dead = parseTaskDeadline(deadline).getTime();
   return (sub - dead) / (1000 * 60 * 60);
 }
+
+// Meetup isn't included here — its profile URLs don't follow a clean handle
+// pattern (meetup.com/members/<numeric-id>), so that field stays a plain
+// full-URL input instead of being auto-constructed.
+const PROFILE_LINK_BASE: Record<string, string> = {
+  github: 'https://github.com/',
+  linkedin: 'https://linkedin.com/in/',
+  instagram: 'https://instagram.com/',
+  builderId: 'https://builder.aws.com/community/@',
+};
+
+// Members can store either a full profile URL or just their bare handle for
+// these fields — this turns whichever was stored into a real clickable link,
+// so the input stays lightweight (just "aarohi1805") while the display is
+// always a proper working URL. Existing full-URL records keep working as-is.
+export function toProfileLink(field: keyof typeof PROFILE_LINK_BASE, value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return PROFILE_LINK_BASE[field] + trimmed.replace(/^@/, '');
+}
+
+// Meetup stays full-URL-only — just validates/passes it through as-is.
+export function toMeetupLink(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
+}

@@ -2,7 +2,7 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Code2, Link2, Camera, Award, ExternalLink, Pencil, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Code2, Link2, Camera, Award, Users2, ExternalLink, Pencil, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatRole } from '@/lib/utils';
+import { formatRole, toProfileLink, toMeetupLink } from '@/lib/utils';
 import { canEditMembers } from '@/lib/permissions';
 import { DOMAIN_SUBDOMAINS } from '@/types';
 import Link from 'next/link';
@@ -136,7 +136,6 @@ export default function MemberProfilePage({ params }: { params: Promise<{ member
     </div>
   );
   if (!member) return null;
-  const isSafeUrl = (url?: string | null) => !!url && /^https?:\/\//i.test(url);
   const editSubdomains = form.domain !== NONE ? (DOMAIN_SUBDOMAINS[form.domain as keyof typeof DOMAIN_SUBDOMAINS] || []) : [];
 
   return (
@@ -176,32 +175,40 @@ export default function MemberProfilePage({ params }: { params: Promise<{ member
                     <span className="font-mono">{member.phone}</span>
                   </div>
                 )}
-                {isSafeUrl(member.github) && (
-                  <a href={member.github} target="_blank" rel="noopener noreferrer"
+                {toProfileLink('github', member.github) && (
+                  <a href={toProfileLink('github', member.github)!} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 text-[#888] hover:text-[#FF9900]">
                     <Code2 size={14} className="text-[#555]" />
                     <span className="truncate">GitHub</span>
                     <ExternalLink size={11} />
                   </a>
                 )}
-                {isSafeUrl(member.linkedin) && (
-                  <a href={member.linkedin} target="_blank" rel="noopener noreferrer"
+                {toProfileLink('linkedin', member.linkedin) && (
+                  <a href={toProfileLink('linkedin', member.linkedin)!} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 text-[#888] hover:text-[#FF9900]">
                     <Link2 size={14} className="text-[#555]" />
                     <span className="truncate">LinkedIn</span>
                     <ExternalLink size={11} />
                   </a>
                 )}
-                {isSafeUrl(member.instagram) && (
-                  <a href={member.instagram} target="_blank" rel="noopener noreferrer"
+                {toProfileLink('instagram', member.instagram) && (
+                  <a href={toProfileLink('instagram', member.instagram)!} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 text-[#888] hover:text-[#FF9900]">
                     <Camera size={14} className="text-[#555]" />
                     <span className="truncate">Instagram</span>
                     <ExternalLink size={11} />
                   </a>
                 )}
-                {isSafeUrl(member.builderId) && (
-                  <a href={member.builderId} target="_blank" rel="noopener noreferrer"
+                {toMeetupLink(member.meetup) && (
+                  <a href={toMeetupLink(member.meetup)!} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-[#888] hover:text-[#FF9900]">
+                    <Users2 size={14} className="text-[#555]" />
+                    <span className="truncate">Meetup</span>
+                    <ExternalLink size={11} />
+                  </a>
+                )}
+                {toProfileLink('builderId', member.builderId) && (
+                  <a href={toProfileLink('builderId', member.builderId)!} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 text-[#888] hover:text-[#FF9900]">
                     <Award size={14} className="text-[#555]" />
                     <span className="truncate">AWS Builder ID</span>
@@ -315,24 +322,24 @@ export default function MemberProfilePage({ params }: { params: Promise<{ member
                 <Input type="email" value={form.personalEmail} onChange={e => setForm(f => ({ ...f, personalEmail: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>GitHub</Label>
-                <Input placeholder="https://github.com/..." value={form.github} onChange={e => setForm(f => ({ ...f, github: e.target.value }))} />
+                <Label>GitHub username</Label>
+                <Input placeholder="your-username" value={form.github} onChange={e => setForm(f => ({ ...f, github: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>LinkedIn</Label>
-                <Input placeholder="https://linkedin.com/in/..." value={form.linkedin} onChange={e => setForm(f => ({ ...f, linkedin: e.target.value }))} />
+                <Label>LinkedIn username</Label>
+                <Input placeholder="your-username" value={form.linkedin} onChange={e => setForm(f => ({ ...f, linkedin: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Instagram</Label>
-                <Input placeholder="https://instagram.com/..." value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} />
+                <Label>Instagram username</Label>
+                <Input placeholder="your-username" value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>AWS Builder ID</Label>
-                <Input placeholder="https://builder.aws.com/..." value={form.builderId} onChange={e => setForm(f => ({ ...f, builderId: e.target.value }))} />
+                <Input placeholder="your-username" value={form.builderId} onChange={e => setForm(f => ({ ...f, builderId: e.target.value }))} />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Meetup</Label>
-                <Input placeholder="https://meetup.com/..." value={form.meetup} onChange={e => setForm(f => ({ ...f, meetup: e.target.value }))} />
+                <Input type="url" placeholder="https://meetup.com/..." value={form.meetup} onChange={e => setForm(f => ({ ...f, meetup: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Faculty Advisor</Label>

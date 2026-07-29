@@ -36,6 +36,12 @@ yarn-error.log*
 # member data exports (contains PII — never commit)
 *.csv
 
+# Google service account key files (Google names downloaded keys
+# "<project-id>-<key-id-prefix>.json") — extract client_email/private_key
+# into .env.local instead and delete the file, never leave it in the repo tree
+website-*.json
+*-service-account*.json
+
 # vercel
 .vercel
 

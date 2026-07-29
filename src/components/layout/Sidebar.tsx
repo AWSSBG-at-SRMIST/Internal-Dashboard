@@ -4,10 +4,10 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail
+  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail, UserCog, AlertTriangle
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
-import { canGenerateMoM, canAccessSponsorshipMail } from '@/lib/permissions';
+import { canGenerateMoM, canAccessSponsorshipMail, canEditMembers } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 import { useState } from 'react';
 
@@ -23,6 +23,8 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} /> },
   { label: 'Tasks', href: '/tasks', icon: <CheckSquare size={18} /> },
   { label: 'Members', href: '/members', icon: <Users size={18} /> },
+  // Presidium + HR & Admin Manager/Associate: add/edit/permanently-delete members.
+  { label: 'Manage Members', href: '/members/manage', icon: <UserCog size={18} />, visible: canEditMembers },
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
   { label: 'Minutes of Meeting', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
@@ -41,8 +43,8 @@ const navItems: NavItem[] = [
   { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 
-function NavPanel({ user, visibleItems, pathname, onNavigate, onLogout }: {
-  user: SessionUser; visibleItems: NavItem[]; pathname: string; onNavigate: () => void; onLogout: () => void;
+function NavPanel({ user, visibleItems, pathname, profileMissingCount, onNavigate, onLogout }: {
+  user: SessionUser; visibleItems: NavItem[]; pathname: string; profileMissingCount: number; onNavigate: () => void; onLogout: () => void;
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -61,32 +63,54 @@ function NavPanel({ user, visibleItems, pathname, onNavigate, onLogout }: {
 
       {/* Nav */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {visibleItems.map(item => {
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn('sidebar-link', isActive && 'active')}
-            >
-              <span className={cn(isActive ? 'text-black' : 'text-[#555]')}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
+        {(() => {
+          // Pick the single longest (most specific) matching href instead of
+          // letting every prefix match independently — otherwise "Members"
+          // (/members) and "Manage Members" (/members/manage) both light up
+          // at once when you're actually on /members/manage.
+          const activeHref = visibleItems.reduce<string | null>((best, item) => {
+            const matches = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
+            if (!matches) return best;
+            return (!best || item.href.length > best.length) ? item.href : best;
+          }, null);
+
+          return visibleItems.map(item => {
+            const isActive = item.href === activeHref;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={cn('sidebar-link', isActive && 'active')}
+              >
+                <span className={cn(isActive ? 'text-black' : 'text-[#555]')}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            );
+          });
+        })()}
       </nav>
 
       {/* User */}
       <div className="p-3 border-t-2 border-[#2d2d2d]">
-        <div className="flex items-center gap-3 px-3 py-2">
+        <Link
+          href="/profile"
+          onClick={onNavigate}
+          className={cn('flex items-center gap-3 px-3 py-2 -mx-1 transition-colors hover:bg-[#1a1a1a]', pathname === '/profile' && 'bg-[#1a1a1a]')}
+        >
           <div className="flex-1 min-w-0">
             <p className="text-white text-xs font-bold uppercase truncate">{user.name}</p>
             <p className="text-[#555] text-xs font-mono truncate">{formatRole(user.role, user.domain)}</p>
+            {profileMissingCount > 0 && (
+              <p className="flex items-center gap-1 text-[10px] text-yellow-400 font-mono mt-0.5">
+                <AlertTriangle size={10} className="flex-shrink-0" />
+                Profile incomplete ({profileMissingCount})
+              </p>
+            )}
           </div>
-        </div>
+        </Link>
         <button
           onClick={onLogout}
           className="w-full flex items-center justify-center gap-2 px-3 py-2.5 mt-2 text-xs font-mono font-bold uppercase tracking-widest text-[#888] border-2 border-[#2d2d2d] hover:text-[#ff4444] hover:border-[#ff4444] hover:bg-[#1a0000] transition-all"
@@ -102,10 +126,11 @@ function NavPanel({ user, visibleItems, pathname, onNavigate, onLogout }: {
 interface SidebarProps {
   user: SessionUser;
   showVault: boolean;
+  profileMissingCount: number;
   children: React.ReactNode;
 }
 
-export function Sidebar({ user, showVault, children }: SidebarProps) {
+export function Sidebar({ user, showVault, profileMissingCount, children }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -137,12 +162,12 @@ export function Sidebar({ user, showVault, children }: SidebarProps) {
         'lg:hidden fixed top-0 left-0 h-dvh w-72 bg-black border-r-2 border-[#2d2d2d] z-50 transform transition-transform duration-300',
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <NavPanel user={user} visibleItems={visibleItems} pathname={pathname} onNavigate={closeMobile} onLogout={handleLogout} />
+        <NavPanel user={user} visibleItems={visibleItems} pathname={pathname} profileMissingCount={profileMissingCount} onNavigate={closeMobile} onLogout={handleLogout} />
       </aside>
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-64 bg-black border-r-2 border-[#2d2d2d] h-full flex-shrink-0">
-        <NavPanel user={user} visibleItems={visibleItems} pathname={pathname} onNavigate={closeMobile} onLogout={handleLogout} />
+        <NavPanel user={user} visibleItems={visibleItems} pathname={pathname} profileMissingCount={profileMissingCount} onNavigate={closeMobile} onLogout={handleLogout} />
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">

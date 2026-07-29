@@ -2,10 +2,10 @@ import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, GetCommand, QueryCommand } from '@/lib/dynamodb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getRoleColor, getDomainColor, getSubdomainColor, getStarColor, formatDate, formatDateTime, formatRole } from '@/lib/utils';
+import { getRoleColor, getDomainColor, getSubdomainColor, getStarColor, formatDate, formatDateTime, formatRole, toProfileLink, toMeetupLink } from '@/lib/utils';
 import { getSubmissionTimingLabel } from '@/lib/ratings';
 import { isPresidium } from '@/lib/permissions';
-import { Mail } from 'lucide-react';
+import { Mail, ExternalLink } from 'lucide-react';
 import EditContactDialog from './EditContactDialog';
 
 export default async function ProfilePage() {
@@ -57,7 +57,9 @@ export default async function ProfilePage() {
                     personalEmail: member?.personalEmail || '',
                     github: member?.github || '',
                     linkedin: member?.linkedin || '',
+                    instagram: member?.instagram || '',
                     meetup: member?.meetup || '',
+                    builderId: member?.builderId || '',
                   }}
                 />
               </div>
@@ -82,7 +84,30 @@ export default async function ProfilePage() {
               {member.clubId && <div className="flex items-baseline justify-between gap-4"><span className="text-[#888] flex-shrink-0">Club ID</span><span className="font-bold text-[#e0e0e0] text-right break-all font-mono">{member.clubId}</span></div>}
               {member.regNo && <div className="flex items-baseline justify-between gap-4"><span className="text-[#888] flex-shrink-0">Reg. No.</span><span className="font-bold text-[#e0e0e0] text-right font-mono">{member.regNo}</span></div>}
               {member.department && <div className="flex items-baseline justify-between gap-4"><span className="text-[#888] flex-shrink-0">Department</span><span className="font-bold text-[#e0e0e0] text-right">{member.department}</span></div>}
-              {member.builderId && <div className="flex items-baseline justify-between gap-4"><span className="text-[#888] flex-shrink-0">Builder ID</span><span className="font-bold text-[#e0e0e0] text-right break-all font-mono">{member.builderId}</span></div>}
+              {([
+                ['github', 'GitHub'], ['linkedin', 'LinkedIn'], ['instagram', 'Instagram'], ['builderId', 'AWS Builder ID'],
+              ] as const).map(([field, label]) => {
+                const href = toProfileLink(field, member[field]);
+                if (!href) return null;
+                return (
+                  <div key={field} className="flex items-baseline justify-between gap-4">
+                    <span className="text-[#888] flex-shrink-0">{label}</span>
+                    <a href={href} target="_blank" rel="noopener noreferrer"
+                      className="font-bold text-[#FF9900] text-right break-all font-mono hover:underline inline-flex items-center gap-1 justify-end">
+                      {href.replace(/^https?:\/\//, '')} <ExternalLink size={11} className="flex-shrink-0" />
+                    </a>
+                  </div>
+                );
+              })}
+              {toMeetupLink(member.meetup) && (
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[#888] flex-shrink-0">Meetup</span>
+                  <a href={toMeetupLink(member.meetup)!} target="_blank" rel="noopener noreferrer"
+                    className="font-bold text-[#FF9900] text-right break-all font-mono hover:underline inline-flex items-center gap-1 justify-end">
+                    {toMeetupLink(member.meetup)!.replace(/^https?:\/\//, '')} <ExternalLink size={11} className="flex-shrink-0" />
+                  </a>
+                </div>
+              )}
               {member.joinedAt && <div className="flex items-baseline justify-between gap-4"><span className="text-[#888] flex-shrink-0">Joined</span><span className="font-bold text-[#e0e0e0] text-right font-mono">{formatDate(member.joinedAt)}</span></div>}
             </CardContent>
           </Card>

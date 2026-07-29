@@ -12,3 +12,14 @@ export async function getActiveMembers(viewer: SessionUser): Promise<Member[]> {
   if (!canViewMemberPII(viewer)) members = members.map((m: any) => stripMemberPII(m));
   return members;
 }
+
+// Same as getActiveMembers but without the isActive filter — used by the
+// Manage Members admin page so a privileged viewer can also see (and
+// reactivate) deactivated members. Always called by a canEditMembers-gated
+// route, so PII is never stripped here.
+export async function getAllMembersForAdmin(): Promise<Member[]> {
+  const result = await db.send(new ScanCommand({ TableName: TABLE.MEMBERS }));
+  const members = (result.Items || []) as Member[];
+  members.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return members;
+}

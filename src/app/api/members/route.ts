@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { db, TABLE, ScanCommand, PutCommand, QueryCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
-import { isPresidium, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
+import { isPresidium, canEditMembers, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
+import { upsertMemberRow } from '@/lib/sheets';
 import { randomUUID } from 'crypto';
+import type { Member } from '@/types';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -60,7 +62,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || !isPresidium(user)) {
+  if (!user || !canEditMembers(user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -81,7 +83,11 @@ export async function POST(req: NextRequest) {
     }
 
     const VALID_ROLES = ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE', 'BUILDER'];
-    const roleToUse = body.role || 'BUILDER';
+    // Non-Presidium HR & Admin staff can create new members (per canEditMembers),
+    // but must not be able to hand out Presidium/Director/Manager/Associate roles
+    // to themselves or anyone else — mirrors the same restriction PUT already
+    // applies (non-Presidium canEditMembers can't touch role/domain/subdomain).
+    const roleToUse = isPresidium(user) ? (body.role || 'BUILDER') : 'BUILDER';
     if (!VALID_ROLES.includes(roleToUse)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
@@ -90,14 +96,17 @@ export async function POST(req: NextRequest) {
     if (scopeError) return NextResponse.json({ error: scopeError }, { status: 400 });
 
     const memberId = randomUUID();
-    const member = {
+    const member: Member = {
       memberId,
       clubId: body.clubId || '',
       name: body.name || '',
       regNo: body.regNo || '',
       department: body.department || '',
       section: body.section || '',
-      role: body.role || 'BUILDER',
+      role: roleToUse,
+      // domain/subdomain sit on sbg-members' DomainIndex GSI, which throws a
+      // ValidationException if the key is ever set to null/empty instead of
+      // being omitted (see the same constraint handled in the PUT handler).
       domain: body.domain || undefined,
       subdomain: body.subdomain || undefined,
       officialEmail: email,
@@ -119,6 +128,7 @@ export async function POST(req: NextRequest) {
 
     await db.send(new PutCommand({ TableName: TABLE.MEMBERS, Item: member }));
     await logAction(user, 'CREATE_MEMBER', 'MEMBER', memberId, `Created member: ${member.name}`);
+    if (member.clubId) upsertMemberRow(member).catch(console.error);
 
     return NextResponse.json({ success: true, data: member });
   } catch (error) {
