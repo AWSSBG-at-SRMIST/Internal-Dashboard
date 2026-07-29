@@ -134,7 +134,7 @@ export function canCreateScope(
     return null;
   }
   if (scope === 'BUILDERS_ONLY') {
-    if (actor.role !== 'ASSOCIATE') return 'Only Associates can assign to Builders';
+    if (actor.role !== 'MANAGER' && actor.role !== 'ASSOCIATE') return 'Only Managers or Associates can assign to Builders';
     if (actor.domain !== domain || actor.subdomain !== subdomain) return 'You can only assign within your own subdomain';
     return null;
   }
