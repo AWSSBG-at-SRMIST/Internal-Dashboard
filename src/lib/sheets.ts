@@ -211,14 +211,22 @@ async function upsertRowInTab(sheets: sheets_v4.Sheets, tab: TabInfo, member: Me
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID!,
       range: `'${tab.title}'!A${rowNumber}:${endCol}${rowNumber}`,
-      valueInputOption: 'USER_ENTERED',
+      // RAW, not USER_ENTERED — member-supplied fields (personalEmail, name,
+      // department, etc.) must never be evaluated as live formulas by Sheets.
+      // USER_ENTERED would let a value like "=HYPERLINK(...)" execute as a
+      // formula for whoever opens the sheet; RAW stores everything literally.
+      valueInputOption: 'RAW',
       requestBody: { values: [rowValues] },
     });
   } else {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID!,
       range: `'${tab.title}'!A1`,
-      valueInputOption: 'USER_ENTERED',
+      // RAW, not USER_ENTERED — member-supplied fields (personalEmail, name,
+      // department, etc.) must never be evaluated as live formulas by Sheets.
+      // USER_ENTERED would let a value like "=HYPERLINK(...)" execute as a
+      // formula for whoever opens the sheet; RAW stores everything literally.
+      valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: [rowValues] },
     });
