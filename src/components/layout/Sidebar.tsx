@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail, UserCog, AlertTriangle
+  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail, UserCog, AlertTriangle, Award
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
 import { canGenerateMoM, canAccessSponsorshipMail, canEditMembers } from '@/lib/permissions';
@@ -40,6 +40,9 @@ const navItems: NavItem[] = [
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Member Activity', href: '/activity', icon: <Activity size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
+  // Faculty/Industry mentors & founding members shown on the public website's
+  // Team page — Presidium-only since only they manage that roster.
+  { label: 'Honorary Members', href: '/honorary-members', icon: <Award size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 

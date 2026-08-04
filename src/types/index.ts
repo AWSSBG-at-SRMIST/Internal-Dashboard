@@ -185,6 +185,24 @@ export type VaultEntrySummary = Omit<VaultEntry, 'encryptedValue' | 'iv' | 'auth
   canManage: boolean;
 };
 
+// Faculty/Industry mentors, founding members, and advisory committee — people
+// who never log in to the dashboard, shown on the public website's Team page
+// (sbg-honorary-members table, read directly by Official-Website) but managed
+// here since Presidium is the only party with edit rights on either side.
+export type HonoraryTag = 'FACULTY_MENTOR' | 'INDUSTRIAL_MENTOR' | 'FOUNDING_MEMBER' | 'ADVISORY';
+
+export interface HonoraryMember {
+  id: string;
+  name: string;
+  tag: HonoraryTag;
+  description?: string;
+  linkedin?: string;
+  photoUrl?: string | null;
+  order?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface AuditLog {
   logId: string;
   action: string;

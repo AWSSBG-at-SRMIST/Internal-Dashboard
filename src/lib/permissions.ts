@@ -1,4 +1,5 @@
 import type { Domain, Subdomain, SessionUser, TaskAssignmentScope, Member, Role } from '@/types';
+import { DOMAIN_SUBDOMAINS } from '@/types';
 
 export function isPresidium(actor: SessionUser): boolean {
   return actor.role === 'SECRETARY' || actor.role === 'SBG_LEADER';
@@ -33,6 +34,17 @@ export function validateRoleScope(role: string, domain?: string | null, subdomai
   }
   if (role === 'DIRECTOR' && subdomain) {
     return 'A Director oversees a whole domain and cannot have a subdomain';
+  }
+  // Catches typos and pre-rename legacy strings (e.g. a subdomain renamed in
+  // DOMAIN_SUBDOMAINS but never migrated on existing records) from ever being
+  // written again — the website's Team page groups members by this exact
+  // string, so a value outside the canonical list silently renders as its
+  // own phantom, always-vacant column instead of matching the real one.
+  if (subdomain && domain && domain !== 'General') {
+    const valid = DOMAIN_SUBDOMAINS[domain as Exclude<Domain, 'General'>] || [];
+    if (!valid.includes(subdomain as Subdomain)) {
+      return `"${subdomain}" is not a valid subdomain for ${domain}`;
+    }
   }
   return null;
 }
