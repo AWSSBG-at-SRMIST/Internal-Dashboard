@@ -130,25 +130,24 @@ interface TabInfo {
   title: string;
   sheetId: number;
   headers: string[];
-  role: 'official' | 'links' | 'merged' | 'skip' | 'unknown';
+  role: 'official' | 'links' | 'merged' | 'other' | 'unknown';
 }
 
 // Confirmed live against the actual spreadsheet: tabs are "Official Data",
-// "Socials", "Certifications" (out of scope — manual upkeep), and
-// "Internship Data" (also out of scope, despite having a Reg No.+GitHub
-// header signature that would otherwise look like a "merged" tab — it's
-// explicitly excluded by title, not just by content).
-const SKIP_TAB_TITLES = new Set(['Certifications', 'Internship Data']);
-
-function classifyTab(title: string, headers: string[]): TabInfo['role'] {
+// "Socials", "Certifications", and "Internship Data". Every tab keyed by
+// Club ID gets a row created/removed on add/delete (structural row
+// lifecycle) — "Certifications" only has Club ID/Name/Domain/Position
+// mapped (headerToValue has no case for its "Certifications" column), so
+// that column is left blank for manual upkeep, but the row itself still
+// gets created and removed like every other tab.
+function classifyTab(headers: string[]): TabInfo['role'] {
   if (!headers.includes('Club ID')) return 'unknown';
-  if (SKIP_TAB_TITLES.has(title.trim()) || headers.includes('Certifications')) return 'skip';
   const hasRegNo = headers.includes('Reg No.');
   const hasGithub = headers.includes('GitHub');
   if (hasRegNo && hasGithub) return 'merged';
   if (hasRegNo) return 'official';
   if (hasGithub) return 'links';
-  return 'unknown';
+  return 'other';
 }
 
 let cachedTabs: TabInfo[] | null = null;
@@ -169,7 +168,7 @@ async function resolveTabs(sheets: sheets_v4.Sheets): Promise<TabInfo[]> {
       range: `'${title}'!1:1`,
     });
     const headers = (res.data.values?.[0] || []).map(cleanCell);
-    tabs.push({ title, sheetId, headers, role: classifyTab(title, headers) });
+    tabs.push({ title, sheetId, headers, role: classifyTab(headers) });
   }
   cachedTabs = tabs;
   return tabs;
@@ -243,7 +242,7 @@ export async function upsertMemberRow(member: Member, oldClubId?: string | null)
   try {
     const tabs = await resolveTabs(sheets);
     for (const tab of tabs) {
-      if (tab.role === 'skip' || tab.role === 'unknown') continue;
+      if (tab.role === 'unknown') continue;
       try {
         await upsertRowInTab(sheets, tab, member, oldClubId);
       } catch (err) {
@@ -264,7 +263,7 @@ export async function deleteMemberRow(clubId: string): Promise<void> {
     const tabs = await resolveTabs(sheets);
     const requests: sheets_v4.Schema$Request[] = [];
     for (const tab of tabs) {
-      if (tab.role === 'skip' || tab.role === 'unknown') continue;
+      if (tab.role === 'unknown') continue;
       try {
         const rowIndex = await findRowIndex(sheets, tab.title, clubId);
         if (rowIndex === null) continue;
@@ -296,7 +295,7 @@ export async function readAllMembersFromSheet(): Promise<SheetMemberRow[] | null
   const byClubId = new Map<string, SheetMemberRow>();
 
   for (const tab of tabs) {
-    if (tab.role === 'skip' || tab.role === 'unknown') continue;
+    if (tab.role === 'unknown') continue;
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID!,
       range: `'${tab.title}'!A2:Z`,
