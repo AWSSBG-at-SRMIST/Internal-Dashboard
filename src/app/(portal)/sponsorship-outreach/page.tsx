@@ -9,7 +9,7 @@ export default async function SponsorshipOutreachPage() {
   if (!user) redirect('/login');
   if (!canAccessSponsorshipMail(user)) redirect('/dashboard');
 
-  const initialLog = await getSponsorshipOutreachLog();
+  const initialLog = await getSponsorshipOutreachLog(user);
 
   return <SponsorshipOutreachClient initialLog={initialLog} />;
 }

@@ -1,12 +1,13 @@
 import { randomUUID } from 'crypto';
 import { db, TABLE, GetCommand, PutCommand, ScanCommand } from '@/lib/dynamodb';
 import { decryptVaultValue } from '@/lib/vault-crypto';
+import { canViewSponsorshipLogEntry } from '@/lib/permissions';
 import { ImapFlow } from 'imapflow';
 // nodemailer ships its own MIME builder that composes a raw RFC822 message
 // without actually sending anything — exactly what we need to hand to IMAP's
 // APPEND command. No new mail-building dependency required.
 import MailComposer from 'nodemailer/lib/mail-composer';
-import type { SessionUser } from '@/types';
+import type { SessionUser, Role } from '@/types';
 
 const MAX_COMPANIES_PER_BATCH = 5;
 
@@ -23,17 +24,21 @@ export interface SponsorshipDraftResult {
   error?: string;
 }
 
-// A shared, team-visible record of outreach ("who mailed which company,
-// when") — every Sponsorship & Finance member, Corporate Director, and
-// Presidium sees the same list on the page itself. Distinct from the
-// app-wide Audit Logs (which are Presidium-only and not what was asked for
-// here) — this is closer to a shared team log than a security audit trail.
+// A team-visible record of outreach ("who mailed which company, when") —
+// visibility is hierarchical (see canViewSponsorshipLogEntry): a Builder
+// sees only their own entries, an Associate sees their own + Builders',
+// a Manager sees their own + Associates' + Builders', and Presidium /
+// the Corporate Director see everyone's. Sending access itself (who can
+// create drafts at all) is unchanged — this only scopes the log view.
+// Distinct from the app-wide Audit Logs (Presidium-only) — this is closer
+// to a shared team log than a security audit trail.
 export interface SponsorshipOutreachLogEntry {
   logId: string;
   companyName: string;
   companyEmail: string;
   createdBy: string;
   createdByName: string;
+  createdByRole: Role | null;
   createdAt: string;
 }
 
@@ -46,18 +51,21 @@ async function recordOutreachLog(user: SessionUser, companyName: string, company
       companyEmail,
       createdBy: user.memberId,
       createdByName: user.name,
+      createdByRole: user.role,
       createdAt: new Date().toISOString(),
     },
   }));
 }
 
 // Mirrors GET /api/sponsorship-outreach/log — used by the page's Server
-// Component for the initial render.
-export async function getSponsorshipOutreachLog(): Promise<SponsorshipOutreachLogEntry[]> {
+// Component for the initial render. Filtered per-viewer per the hierarchy
+// documented on SponsorshipOutreachLogEntry above.
+export async function getSponsorshipOutreachLog(viewer: SessionUser): Promise<SponsorshipOutreachLogEntry[]> {
   const result = await db.send(new ScanCommand({ TableName: TABLE.SPONSORSHIP_LOG }));
   const entries = (result.Items || []) as SponsorshipOutreachLogEntry[];
-  entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  return entries;
+  const visible = entries.filter(e => canViewSponsorshipLogEntry(viewer, e));
+  visible.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return visible;
 }
 
 function escapeHtml(str: string): string {

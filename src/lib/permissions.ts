@@ -1,4 +1,4 @@
-import type { Domain, Subdomain, SessionUser, TaskAssignmentScope, Member } from '@/types';
+import type { Domain, Subdomain, SessionUser, TaskAssignmentScope, Member, Role } from '@/types';
 
 export function isPresidium(actor: SessionUser): boolean {
   return actor.role === 'SECRETARY' || actor.role === 'SBG_LEADER';
@@ -88,6 +88,27 @@ export function canAccessSponsorshipMail(actor: SessionUser): boolean {
   if (isPresidium(actor)) return true;
   if (actor.role === 'DIRECTOR' && actor.domain === 'Corporate') return true;
   return actor.subdomain === 'Sponsorship & Finance';
+}
+
+// Scopes the sponsorship outreach LOG view only — sending access itself is
+// governed solely by canAccessSponsorshipMail above and is unaffected by this.
+// Hierarchical within the Sponsorship & Finance subdomain (the only source of
+// non-Director/Presidium entries, since canAccessSponsorshipMail gates who can
+// create one): Builder sees only their own; Associate sees own + Builders';
+// Manager sees own + Associates' + Builders'; Presidium and the Corporate
+// Director see everyone's. Entries from before this field existed
+// (createdByRole missing) default to visible-to-all rather than disappearing.
+export function canViewSponsorshipLogEntry(
+  viewer: SessionUser,
+  entry: { createdBy: string; createdByRole?: Role | null },
+): boolean {
+  if (viewer.memberId === entry.createdBy) return true;
+  if (isPresidium(viewer)) return true;
+  if (viewer.role === 'DIRECTOR' && viewer.domain === 'Corporate') return true;
+  if (!entry.createdByRole) return true; // legacy entry, no role recorded
+  if (viewer.role === 'MANAGER') return entry.createdByRole === 'ASSOCIATE' || entry.createdByRole === 'BUILDER';
+  if (viewer.role === 'ASSOCIATE') return entry.createdByRole === 'BUILDER';
+  return false;
 }
 
 // Validates whether the actor can create a task with the given scope + domain/subdomain/assignedToId.

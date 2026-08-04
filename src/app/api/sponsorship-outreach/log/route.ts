@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   try {
-    const data = await getSponsorshipOutreachLog();
+    const data = await getSponsorshipOutreachLog(user);
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Sponsorship outreach log error:', error);
