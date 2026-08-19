@@ -58,7 +58,9 @@ export function validateRoleScope(role: string, domain?: string | null, subdomai
 //   Associate-created (BUILDERS_ONLY)              -> that subdomain's Manager, that domain's Director
 //   Manager-created   (SUBDOMAIN_WIDE, INDIVIDUAL)  -> that domain's Director
 //   Director-created  (DOMAIN_WIDE, SUBDOMAIN_LEADERSHIP) -> nobody extra (creator only)
-//   Org-wide (ORG_WIDE/GENERAL, whoever created it) -> Presidium, always
+//   Org-wide (ORG_WIDE/GENERAL, whoever created it) -> Presidium, always;
+//     also every member of the HR & Admin subdomain (any role), since that
+//     subdomain owns org-wide administration.
 //   Presidium-created (ALL_DIRECTORS, SINGLE_DIRECTOR) -> handled separately by
 //     callers' existing "creatorIsPresidium" check, not by this function.
 export function hasHierarchicalReviewAccess(
@@ -68,7 +70,7 @@ export function hasHierarchicalReviewAccess(
   const scope = task.assignmentType;
 
   if (scope === 'ORG_WIDE' || scope === 'GENERAL') {
-    return isPresidium(actor);
+    return isPresidium(actor) || actor.subdomain === 'HR & Admin';
   }
   if (scope === 'SUBDOMAIN_WIDE' || scope === 'SUBDOMAIN' || scope === 'INDIVIDUAL') {
     return actor.role === 'DIRECTOR' && actor.domain === task.domain;
