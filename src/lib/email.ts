@@ -1,12 +1,16 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+// Resend, not Gmail — Gmail's daily sending limit (500/day, shared across
+// every email sent from one account, including Recruitment-Portal's OTP
+// traffic on the same Gmail account) got hit during recruitment week and
+// blocked logins entirely. Resend has no such shared per-account cap.
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const FROM_ADDRESS = 'AWSSBG Internal Dashboard <internal-dashboard@awssbg-srmist.in>';
+// A small, pre-compressed copy — the source logo.png is 2.6MB (6250x6250),
+// far too large to embed at 36x36 in an email without slow/broken loading
+// in some clients.
+const LOGO_URL = 'https://internal-dashboard.awssbg-srmist.in/logo-email.png';
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
@@ -51,14 +55,21 @@ function shell(title: string, body: string) {
 
     <div style="background:#0d0d0d;border:2px solid #2d2d2d;border-top:none;padding:32px 32px 28px;">
 
-      <div style="padding-bottom:20px;margin-bottom:28px;border-bottom:1px solid #1e1e1e;">
-        <span style="color:#FF9900;font-size:13px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">
-          AWSSBG Internal Dashboard
-        </span><br>
-        <span style="color:#aaa;font-size:11px;letter-spacing:1px;">
-          @AWSSBG &middot; SRM Institute of Science and Technology
-        </span>
-      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="padding-bottom:20px;margin-bottom:28px;border-bottom:1px solid #1e1e1e;">
+        <tr>
+          <td style="padding-right:12px;vertical-align:middle;">
+            <img src="${LOGO_URL}" alt="AWSSBG" width="36" height="36" style="display:block;border-radius:6px;">
+          </td>
+          <td style="vertical-align:middle;">
+            <span style="color:#FF9900;font-size:13px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">
+              AWSSBG Internal Dashboard
+            </span><br>
+            <span style="color:#aaa;font-size:11px;letter-spacing:1px;">
+              @AWSSBG &middot; SRM Institute of Science and Technology
+            </span>
+          </td>
+        </tr>
+      </table>
 
       ${body}
 
@@ -99,6 +110,11 @@ function ctaButton(href: string, label: string) {
   </div>`;
 }
 
+async function send(to: string, subject: string, html: string) {
+  const { error } = await resend.emails.send({ from: FROM_ADDRESS, to, subject, html });
+  if (error) throw new Error(`Resend send failed: ${error.message}`);
+}
+
 // ─── OTP Email ────────────────────────────────────────────────────────────────
 
 export async function sendOTPEmail(email: string, otp: string, name = 'Member') {
@@ -128,12 +144,7 @@ export async function sendOTPEmail(email: string, otp: string, name = 'Member') 
       Do not share this OTP with anyone.
     </p>`;
 
-  await transporter.sendMail({
-    from: `"AWSSBG Internal Dashboard" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `[${otp}] Your sign-in OTP — AWSSBG Dashboard`,
-    html: shell('Sign-In OTP', body),
-  });
+  await send(email, `[${otp}] Your sign-in OTP — AWSSBG Dashboard`, shell('Sign-In OTP', body));
 }
 
 // ─── Task Assignment Email ────────────────────────────────────────────────────
@@ -193,12 +204,7 @@ export async function sendTaskAssignmentEmail(
 
     ${ctaButton(taskUrl, 'View Task')}`;
 
-  await transporter.sendMail({
-    from: `"AWSSBG Internal Dashboard" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `[NEW TASK] ${taskTitle} — AWSSBG Dashboard`,
-    html: shell('New Task Assigned', body),
-  });
+  await send(email, `[NEW TASK] ${taskTitle} — AWSSBG Dashboard`, shell('New Task Assigned', body));
 }
 
 // ─── Delegate Review Email ────────────────────────────────────────────────────
@@ -243,12 +249,7 @@ export async function sendDelegateReviewEmail(
 
     ${ctaButton(taskUrl, 'Open Task')}`;
 
-  await transporter.sendMail({
-    from: `"AWSSBG Internal Dashboard" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `[REVIEW DELEGATED] ${taskTitle} — AWSSBG Dashboard`,
-    html: shell('Review Delegation', body),
-  });
+  await send(email, `[REVIEW DELEGATED] ${taskTitle} — AWSSBG Dashboard`, shell('Review Delegation', body));
 }
 
 // ─── Task Reminder Email ──────────────────────────────────────────────────────
@@ -287,10 +288,5 @@ export async function sendTaskReminderEmail(
 
     ${ctaButton(taskUrl, 'Submit Now')}`;
 
-  await transporter.sendMail({
-    from: `"AWSSBG Internal Dashboard" <${process.env.GMAIL_USER}>`,
-    to: email,
-    subject: `[REMINDER] "${taskTitle}" is due soon — AWSSBG Dashboard`,
-    html: shell('Task Deadline Reminder', body),
-  });
+  await send(email, `[REMINDER] "${taskTitle}" is due soon — AWSSBG Dashboard`, shell('Task Deadline Reminder', body));
 }
