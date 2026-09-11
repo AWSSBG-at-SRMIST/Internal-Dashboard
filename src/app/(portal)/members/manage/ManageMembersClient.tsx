@@ -1,12 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, RefreshCw, Loader2, Search, UserX } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Search, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
@@ -30,14 +28,6 @@ const EMPTY_FORM = {
 
 type FormState = typeof EMPTY_FORM;
 
-interface SyncDiffField { field: string; from: unknown; to: unknown }
-interface SyncDiff {
-  added: Array<{ clubId: string; name?: string; officialEmail?: string }>;
-  changed: Array<{ clubId: string; memberId: string; name: string; fields: SyncDiffField[] }>;
-  removedClubIds: string[];
-  skipped: Array<{ clubId: string; reason: string }>;
-}
-
 function memberToForm(m: Member): FormState {
   return {
     name: m.name || '', officialEmail: m.officialEmail || '', role: m.role || 'BUILDER',
@@ -49,7 +39,6 @@ function memberToForm(m: Member): FormState {
 }
 
 export default function ManageMembersClient({ me, initialMembers }: { me: SessionUser; initialMembers: Member[] }) {
-  const router = useRouter();
   const canPickRole = isPresidium(me);
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [search, setSearch] = useState('');
@@ -65,10 +54,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
-
-  const [syncing, setSyncing] = useState(false);
-  const [syncDiff, setSyncDiff] = useState<SyncDiff | null>(null);
-  const [applyingSync, setApplyingSync] = useState(false);
 
   const filtered = useMemo(() => members.filter(m => {
     const q = search.toLowerCase();
@@ -179,27 +164,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
       setDeleteConfirmText('');
     } catch { toast.error('Failed to delete member'); }
     finally { setDeleting(false); }
-  }
-
-  async function runSync(confirm: boolean) {
-    if (confirm) setApplyingSync(true); else setSyncing(true);
-    try {
-      const res = await fetch('/api/members/sheet-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm }),
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Sync failed'); return; }
-      if (confirm) {
-        toast.success(`Synced: ${data.summary.added} created, ${data.summary.changed} updated`);
-        setSyncDiff(null);
-        router.refresh();
-      } else {
-        setSyncDiff(data.diff);
-      }
-    } catch { toast.error('Sync failed'); }
-    finally { setSyncing(false); setApplyingSync(false); }
   }
 
   const editSubdomains = (form: FormState) => form.domain !== NONE ? (DOMAIN_SUBDOMAINS[form.domain as keyof typeof DOMAIN_SUBDOMAINS] || []) : [];
@@ -324,9 +288,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
           <p className="text-sm text-[#666] mt-1 font-mono">{members.length} members total</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => runSync(false)} disabled={syncing}>
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sync from Sheet
-          </Button>
           <Button onClick={() => setShowAdd(true)}><Plus size={16} /> Add Member</Button>
         </div>
       </div>
@@ -461,80 +422,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
               onClick={confirmDelete}
             >
               {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting...</> : 'Permanently Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Sync from Sheet preview */}
-      <Dialog open={syncDiff !== null} onOpenChange={open => { if (!open) setSyncDiff(null); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Sync from Google Sheet</DialogTitle></DialogHeader>
-          {syncDiff && (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="flex flex-wrap gap-2 text-xs font-mono">
-                <Badge variant="outline">{syncDiff.added.length} new</Badge>
-                <Badge variant="outline">{syncDiff.changed.length} changed</Badge>
-                <Badge variant="outline">{syncDiff.removedClubIds.length} missing from sheet</Badge>
-                {syncDiff.skipped.length > 0 && <Badge variant="destructive">{syncDiff.skipped.length} skipped</Badge>}
-              </div>
-
-              {syncDiff.added.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#666] mb-2">New members to create</p>
-                  <ul className="text-sm space-y-1">
-                    {syncDiff.added.map(a => <li key={a.clubId} className="font-mono text-[#f0f0f0]">{a.clubId} — {a.name} ({a.officialEmail})</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {syncDiff.changed.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#666] mb-2">Members to update</p>
-                  <ul className="text-sm space-y-2">
-                    {syncDiff.changed.map(c => (
-                      <li key={c.clubId} className="font-mono text-[#f0f0f0]">
-                        {c.clubId} — {c.name}
-                        <ul className="pl-4 text-xs text-[#888]">
-                          {c.fields.map(f => <li key={f.field}>{f.field}: {JSON.stringify(f.from)} → {JSON.stringify(f.to)}</li>)}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {syncDiff.removedClubIds.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#666] mb-2">
-                    In DynamoDB but missing from the sheet (not deleted — review manually)
-                  </p>
-                  <p className="text-xs font-mono text-[#888]">{syncDiff.removedClubIds.join(', ')}</p>
-                </div>
-              )}
-
-              {syncDiff.skipped.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-red-400 mb-2">Skipped</p>
-                  <ul className="text-xs font-mono text-[#888] space-y-1">
-                    {syncDiff.skipped.map(s => <li key={s.clubId}>{s.clubId}: {s.reason}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {syncDiff.added.length === 0 && syncDiff.changed.length === 0 && (
-                <p className="text-sm text-[#888]">Nothing to apply — dashboard and sheet already match.</p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setSyncDiff(null)} disabled={applyingSync}>Cancel</Button>
-            <Button
-              type="button"
-              onClick={() => runSync(true)}
-              disabled={applyingSync || !syncDiff || (syncDiff.added.length === 0 && syncDiff.changed.length === 0)}
-            >
-              {applyingSync ? <><Loader2 size={14} className="animate-spin" /> Applying...</> : 'Apply Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

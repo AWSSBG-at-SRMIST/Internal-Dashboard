@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { getRoleColor, getDomainColor, getSubdomainColor, getStarColor, formatDate, formatDateTime, formatRole, toProfileLink, toMeetupLink } from '@/lib/utils';
 import { getSubmissionTimingLabel } from '@/lib/ratings';
 import { isPresidium } from '@/lib/permissions';
+import { getProfileCompleteness } from '@/lib/profile-completeness';
 import { Mail, ExternalLink } from 'lucide-react';
 import EditContactDialog from './EditContactDialog';
 
@@ -30,6 +31,7 @@ export default async function ProfilePage() {
   const member = (memberResult as any).Item;
   const rating = (ratingResult as any).Item;
   const recentSubs = (subsResult as any).Items || [];
+  const completeness = member ? getProfileCompleteness(member) : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn">
@@ -75,6 +77,33 @@ export default async function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      {completeness && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <span className="text-sm font-bold text-[#f0f0f0] uppercase tracking-wide">Profile Completeness</span>
+              <span className={`text-sm font-bold font-mono ${completeness.percent === 100 ? 'text-green-400' : 'text-[#FF9900]'}`}>
+                {completeness.percent}%
+              </span>
+            </div>
+            <div className="h-2 w-full bg-[#1a1a1a] border border-[#2d2d2d]">
+              <div
+                className={`h-full ${completeness.percent === 100 ? 'bg-green-400' : 'bg-[#FF9900]'}`}
+                style={{ width: `${completeness.percent}%` }}
+              />
+            </div>
+            {completeness.percent === 100 ? (
+              <p className="text-xs text-green-400 mt-2">Your profile is fully complete.</p>
+            ) : (
+              <p className="text-xs text-[#888] mt-2">
+                Missing: <span className="text-[#f0f0f0]">{completeness.missing.join(', ')}</span>. Use &quot;Edit
+                Contact&quot; above, or ask a Manager/Director to fill the rest in from Manage Members.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {member && (
         <div className={presidium ? '' : 'grid md:grid-cols-2 gap-6'}>

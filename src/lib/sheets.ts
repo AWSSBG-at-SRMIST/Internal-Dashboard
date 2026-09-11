@@ -1,6 +1,6 @@
 import { google, sheets_v4 } from 'googleapis';
 import { toProfileLink } from '@/lib/utils';
-import type { Member, Role, Domain, Subdomain } from '@/types';
+import type { Member, Role } from '@/types';
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 
@@ -24,15 +24,6 @@ function getClient(): sheets_v4.Sheets | null {
   });
   return google.sheets({ version: 'v4', auth });
 }
-
-const POSITION_TO_ROLE: Record<string, Role> = {
-  'SBG Leader': 'SBG_LEADER',
-  'Secretary': 'SECRETARY',
-  'Director': 'DIRECTOR',
-  'Manager': 'MANAGER',
-  'Associate': 'ASSOCIATE',
-  'Builder': 'BUILDER',
-};
 
 const ROLE_TO_POSITION: Record<Role, string> = {
   SBG_LEADER: 'SBG Leader',
@@ -75,55 +66,6 @@ function headerToValue(member: Member, header: string): string {
     case 'Builder ID': case 'AWS Builder ID': return toProfileLink('builderId', member.builderId) || '';
     default: return '';
   }
-}
-
-// Partial view of a member as reconstructed from the sheet (merged across
-// every in-scope tab that mentions their Club ID). Fields the sheet doesn't
-// track at all (whatsapp, instagram, isActive, memberId, ...) are absent.
-export interface SheetMemberRow {
-  clubId: string;
-  name?: string;
-  role?: Role;
-  domain?: Domain | null;
-  subdomain?: Subdomain | null;
-  regNo?: string;
-  department?: string;
-  officialEmail?: string;
-  personalEmail?: string;
-  phone?: string;
-  faName?: string;
-  faPhone?: string;
-  faEmail?: string;
-  section?: string;
-  github?: string;
-  linkedin?: string;
-  meetup?: string;
-  builderId?: string;
-}
-
-function applyRowToRecord(record: SheetMemberRow, headers: string[], row: unknown[]) {
-  headers.forEach((header, i) => {
-    const value = cleanCell(row[i]);
-    switch (header) {
-      case 'Name': record.name = value; break;
-      case 'Position': if (POSITION_TO_ROLE[value]) record.role = POSITION_TO_ROLE[value]; break;
-      case 'Domain': record.domain = (value === 'Presidium' || !value) ? null : (value as Domain); break;
-      case 'Reg No.': record.regNo = value; break;
-      case 'Department': record.department = value; break;
-      case 'Sub-Domain': record.subdomain = (value || null) as Subdomain | null; break;
-      case 'E-Mail (Off)': record.officialEmail = value.toLowerCase(); break;
-      case 'E-Mail (Per)': record.personalEmail = value; break;
-      case 'Phone No.': record.phone = value; break;
-      case 'FA Name': record.faName = value; break;
-      case 'FA Ph No': record.faPhone = value; break;
-      case 'FA E-Mail': record.faEmail = value; break;
-      case 'Section': record.section = value; break;
-      case 'GitHub': record.github = value; break;
-      case 'LinkedIn': record.linkedin = value; break;
-      case 'Meetup Profile': record.meetup = value; break;
-      case 'Builder ID': case 'AWS Builder ID': record.builderId = value; break;
-    }
-  });
 }
 
 interface TabInfo {
@@ -282,36 +224,4 @@ export async function deleteMemberRow(clubId: string): Promise<void> {
   } catch (err) {
     console.error('Sheets delete failed', err);
   }
-}
-
-// Reads every in-scope tab and merges rows by Club ID into one record per
-// member — used by the manual "Sync from Sheet" pull. Returns null when the
-// integration isn't configured (missing env vars).
-export async function readAllMembersFromSheet(): Promise<SheetMemberRow[] | null> {
-  const sheets = getClient();
-  if (!sheets) return null;
-
-  const tabs = await resolveTabs(sheets);
-  const byClubId = new Map<string, SheetMemberRow>();
-
-  for (const tab of tabs) {
-    if (tab.role === 'unknown') continue;
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID!,
-      range: `'${tab.title}'!A2:Z`,
-    });
-    for (const row of res.data.values || []) {
-      const clubId = cleanCell(row[0]);
-      if (!clubId) continue;
-      const record = byClubId.get(clubId) || { clubId };
-      applyRowToRecord(record, tab.headers, row);
-      byClubId.set(clubId, record);
-    }
-  }
-
-  return Array.from(byClubId.values());
-}
-
-export function isSheetsSyncConfigured(): boolean {
-  return getClient() !== null;
 }
