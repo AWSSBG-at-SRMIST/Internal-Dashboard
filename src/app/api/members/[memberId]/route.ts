@@ -4,6 +4,7 @@ import { db, TABLE, GetCommand, UpdateCommand, DeleteCommand } from '@/lib/dynam
 import { logAction } from '@/lib/audit';
 import { isPresidium, canEditMembers, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
 import { upsertMemberRow, deleteMemberRow } from '@/lib/sheets';
+import { trashMemberDriveFolder, revokeDriveFolderPermission } from '@/lib/drive';
 import type { Member } from '@/types';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
@@ -174,7 +175,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ m
   try {
     const existing = await db.send(new GetCommand({ TableName: TABLE.MEMBERS, Key: { memberId } }));
     if (!existing.Item) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
-    const { name, clubId } = existing.Item;
+    const { name, clubId, driveFolderId, drivePermissionId } = existing.Item;
 
     // Permanent delete — submissions/tasks/audit logs keep their own
     // denormalized name snapshots so history still displays correctly; only
@@ -186,6 +187,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ m
     await invalidateSessionsForMember(memberId).catch(console.error);
     await logAction(user, 'DELETE_MEMBER', 'MEMBER', memberId, `Permanently deleted member: ${name}`);
     if (clubId) deleteMemberRow(clubId).catch(console.error);
+
+    // Revoke Drive access then trash the folder — fire-and-forget so a Drive
+    // hiccup never blocks the response. Both ops are best-effort.
+    if (driveFolderId) {
+      if (drivePermissionId) revokeDriveFolderPermission(driveFolderId, drivePermissionId).catch(console.error);
+      trashMemberDriveFolder(driveFolderId).catch(console.error);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

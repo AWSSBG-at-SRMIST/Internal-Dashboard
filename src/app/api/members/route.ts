@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { db, TABLE, ScanCommand, PutCommand, QueryCommand } from '@/lib/dynamodb';
+import { db, TABLE, ScanCommand, PutCommand, QueryCommand, UpdateCommand } from '@/lib/dynamodb';
 import { logAction } from '@/lib/audit';
 import { isPresidium, canEditMembers, validateRoleScope, canViewMemberPII, stripMemberPII } from '@/lib/permissions';
 import { upsertMemberRow } from '@/lib/sheets';
+import { createMemberDriveFolder } from '@/lib/drive';
 import { randomUUID } from 'crypto';
 import type { Member } from '@/types';
 
@@ -129,6 +130,20 @@ export async function POST(req: NextRequest) {
     await db.send(new PutCommand({ TableName: TABLE.MEMBERS, Item: member }));
     await logAction(user, 'CREATE_MEMBER', 'MEMBER', memberId, `Created member: ${member.name}`);
     if (member.clubId) upsertMemberRow(member).catch(console.error);
+
+    // Drive folder creation is fire-and-forget — the DynamoDB record is the
+    // source of truth; a folder failure never blocks the member creation.
+    if (member.domain && member.subdomain) {
+      createMemberDriveFolder(member).then(async result => {
+        if (!result) return;
+        await db.send(new UpdateCommand({
+          TableName: TABLE.MEMBERS,
+          Key: { memberId },
+          UpdateExpression: 'SET driveFolderId = :fid, drivePermissionId = :pid',
+          ExpressionAttributeValues: { ':fid': result.folderId, ':pid': result.permissionId ?? '' },
+        }));
+      }).catch(console.error);
+    }
 
     return NextResponse.json({ success: true, data: member });
   } catch (error) {

@@ -51,6 +51,8 @@ export interface Member {
   isActive: boolean;
   totalStars: number;
   teamId?: string;
+  driveFolderId?: string;
+  drivePermissionId?: string;
 }
 
 // Assignment scope — who a task is assigned to.

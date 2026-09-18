@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Search, UserX } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Search, UserX, FolderSync, RefreshCw, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +54,9 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  const [backfilling, setBackfilling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const filtered = useMemo(() => members.filter(m => {
     const q = search.toLowerCase();
@@ -149,6 +152,37 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
       setEditTarget(null);
     } catch { toast.error('Failed to update member'); }
     finally { setSaving(false); }
+  }
+
+  async function backfillDriveFolders() {
+    setBackfilling(true);
+    try {
+      const res = await fetch('/api/members/drive-backfill', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Backfill failed'); return; }
+      const { created, failed, total } = data.data;
+      if (total === 0) toast.success('All members already have Drive folders');
+      else if (failed === 0) toast.success(`Created ${created} Drive folder${created !== 1 ? 's' : ''}`);
+      else toast.warning(`Created ${created}, failed ${failed} of ${total}`);
+      // Reload to reflect new driveFolderIds
+      const membersRes = await fetch('/api/members');
+      const membersData = await membersRes.json();
+      if (membersData.success) setMembers(membersData.data);
+    } catch { toast.error('Backfill failed'); }
+    finally { setBackfilling(false); }
+  }
+
+  async function syncToSheet() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/members/sheet-sync', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Sync failed'); return; }
+      const { synced, failed } = data.data;
+      if (failed === 0) toast.success(`Synced ${synced} member${synced !== 1 ? 's' : ''} to sheet`);
+      else toast.warning(`Synced ${synced}, failed ${failed}`);
+    } catch { toast.error('Sync failed'); }
+    finally { setSyncing(false); }
   }
 
   async function confirmDelete() {
@@ -287,7 +321,15 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
           <h1 className="text-2xl font-bold text-[#f0f0f0] uppercase tracking-wide">Manage Members</h1>
           <p className="text-sm text-[#666] mt-1 font-mono">{members.length} members total</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={syncToSheet} disabled={syncing}>
+            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Sync to Sheet
+          </Button>
+          <Button variant="outline" size="sm" onClick={backfillDriveFolders} disabled={backfilling}>
+            {backfilling ? <Loader2 size={14} className="animate-spin" /> : <FolderSync size={14} />}
+            Backfill Drive Folders
+          </Button>
           <Button onClick={() => setShowAdd(true)}><Plus size={16} /> Add Member</Button>
         </div>
       </div>
@@ -329,6 +371,7 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
                 <th className="table-header text-left">Member</th>
                 <th className="table-header text-left">Role</th>
                 <th className="table-header text-left">Club ID</th>
+                <th className="table-header text-center">Drive</th>
                 <th className="table-header text-center">Actions</th>
               </tr>
             </thead>
@@ -343,6 +386,26 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
                     <span className="text-xs text-[#f0f0f0] font-mono uppercase">{formatRole(member.role, member.domain)}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-[#f0f0f0] font-mono">{member.clubId}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center">
+                      {member.subdomain ? (
+                        member.driveFolderId ? (
+                          <a
+                            href={`https://drive.google.com/drive/folders/${member.driveFolderId}`}
+                            target="_blank" rel="noopener noreferrer"
+                            title="Open Drive folder"
+                            className="text-green-400 hover:text-green-300 transition-colors"
+                          >
+                            <FolderOpen size={15} />
+                          </a>
+                        ) : (
+                          <span title="No Drive folder yet" className="text-[#555]"><FolderSync size={15} /></span>
+                        )
+                      ) : (
+                        <span title="No subdomain — Drive folder not applicable" className="text-[#333]">—</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => openEdit(member)}><Pencil size={13} /> Edit</Button>
@@ -407,6 +470,9 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
             <p className="text-sm text-[#888]">
               This cannot be undone. Their account, ratings, and sessions will be removed. Past submissions/tasks keep this
               person&apos;s name but any link to their profile will stop working.
+              {deleteTarget?.driveFolderId && (
+                <> Their Drive folder will be moved to trash and their access revoked.</>
+              )}
             </p>
             <div className="space-y-1.5">
               <Label>Type <span className="font-bold text-[#f0f0f0]">{deleteTarget?.name}</span> to confirm</Label>
