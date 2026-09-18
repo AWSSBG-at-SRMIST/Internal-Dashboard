@@ -205,6 +205,29 @@ export interface HonoraryMember {
   updatedAt?: string;
 }
 
+// Scope of a Minutes of Meeting — determines which Drive subfolder it's filed under
+// and which members it's visible to (attendee-based; Presidium sees all).
+export type MoMScope = 'CORE_TEAM' | 'DOMAIN' | 'SUBDOMAIN';
+
+export interface MoM {
+  momId: string;
+  meetingType: string;
+  date: string;           // ISO "YYYY-MM-DD"
+  time: string;
+  platform: string;
+  scope: MoMScope;
+  domain: Domain | null;
+  subdomain: Subdomain | null;
+  driveFileId: string;
+  driveViewUrl: string;
+  preparedById: string;
+  preparedByName: string;
+  reviewedBy: string;
+  attendeeMemberIds: string[];
+  attendees: Array<{ name: string; role: string }>;
+  createdAt: string;
+}
+
 export interface AuditLog {
   logId: string;
   action: string;

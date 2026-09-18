@@ -1,19 +1,13 @@
+import { Readable } from 'stream';
 import { google, drive_v3 } from 'googleapis';
-import type { Member } from '@/types';
-
-// One-time setup required before Drive folder features work:
-// 1. Enable "Google Drive API" in the same GCP project as the Sheets API.
-// 2. Share the SBG Drive's top-level "Domains" folder with the service account
-//    email (GOOGLE_SHEETS_CLIENT_EMAIL) as Editor.
-// 3. Copy that folder's ID from its Drive URL and set DRIVE_DOMAINS_FOLDER_ID
-//    in .env.local and in Vercel's environment variables.
+import type { Member, MoMScope } from '@/types';
 
 const DOMAINS_FOLDER_ID = process.env.DRIVE_DOMAINS_FOLDER_ID;
 
 function getDriveClient(): drive_v3.Drive | null {
   const email = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
   const key = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
-  if (!email || !key || !DOMAINS_FOLDER_ID) return null;
+  if (!email || !key) return null;
   const auth = new google.auth.JWT({
     email,
     key: key.replace(/\\n/g, '\n'),
@@ -65,14 +59,12 @@ async function findOrCreateChildFolder(
 //   Director           → Domains/{Domain}/{clubId}/
 //   Manager/Associate/Builder → Domains/{Domain}/{Subdomain}/{clubId}/
 // Presidium members do not get personal Drive folders.
-// Returns { folderId, permissionId } on success, null if Drive is not
-// configured, role is Presidium, or required fields are missing.
-// Best-effort — never throws.
 export async function createMemberDriveFolder(
   member: Member,
 ): Promise<{ folderId: string; permissionId?: string } | null> {
   if (member.role === 'SBG_LEADER' || member.role === 'SECRETARY') return null;
   if (!member.clubId || !member.domain) return null;
+  if (!DOMAINS_FOLDER_ID) return null;
   const drive = getDriveClient();
   if (!drive) return null;
 
@@ -156,4 +148,60 @@ export function driveConfigured(): boolean {
     process.env.GOOGLE_SHEETS_CLIENT_EMAIL &&
     process.env.GOOGLE_SHEETS_PRIVATE_KEY
   );
+}
+
+// Uploads a MoM PDF to the centralized Minutes Of Meetings folder tree.
+// Folder structure under DRIVE_MOM_FOLDER_ID:
+//   CORE_TEAM            → Core Team/
+//   DOMAIN + domain      → {domain}/
+//   SUBDOMAIN + sub      → {domain}/{subdomain}/
+// Returns { fileId, viewUrl } on success, null if not configured or on error.
+export async function uploadMoMToDrive(
+  pdfBuffer: Buffer,
+  filename: string,
+  scope: MoMScope,
+  domain?: string | null,
+  subdomain?: string | null,
+): Promise<{ fileId: string; viewUrl: string } | null> {
+  const momFolderId = process.env.DRIVE_MOM_FOLDER_ID;
+  if (!momFolderId) return null;
+  const drive = getDriveClient();
+  if (!drive) return null;
+
+  try {
+    let parentId: string;
+
+    if (scope === 'CORE_TEAM') {
+      parentId = await findOrCreateChildFolder(drive, momFolderId, 'Core Team');
+    } else if (scope === 'DOMAIN' && domain) {
+      parentId = await findOrCreateChildFolder(drive, momFolderId, domain);
+    } else if (scope === 'SUBDOMAIN' && domain && subdomain) {
+      const domainFolder = await findOrCreateChildFolder(drive, momFolderId, domain);
+      parentId = await findOrCreateChildFolder(drive, domainFolder, subdomain);
+    } else {
+      return null;
+    }
+
+    const res = await drive.files.create({
+      requestBody: { name: filename, mimeType: 'application/pdf', parents: [parentId] },
+      media: { mimeType: 'application/pdf', body: Readable.from(pdfBuffer) },
+      fields: 'id,webViewLink',
+    });
+
+    return { fileId: res.data.id!, viewUrl: res.data.webViewLink! };
+  } catch (err) {
+    console.error('Drive: uploadMoMToDrive failed', err);
+    return null;
+  }
+}
+
+// Moves any Drive file to trash.
+export async function trashDriveFile(fileId: string): Promise<void> {
+  const drive = getDriveClient();
+  if (!drive) return;
+  try {
+    await drive.files.update({ fileId, requestBody: { trashed: true } });
+  } catch (err) {
+    console.error('Drive: trashDriveFile failed', err);
+  }
 }

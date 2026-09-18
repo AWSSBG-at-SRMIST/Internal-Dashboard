@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { FileDown, Loader2, X, Plus, ClipboardPaste, NotebookPen, ArrowLeft, Wand2, ListChecks } from 'lucide-react';
+import { FileDown, Loader2, X, Plus, ClipboardPaste, NotebookPen, ArrowLeft, Wand2, ListChecks, Upload, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,10 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { canGenerateMoM } from '@/lib/permissions';
 import { formatRole } from '@/lib/utils';
 import Link from 'next/link';
-import type { Member, SessionUser } from '@/types';
+import type { Domain, Member, MoMScope, SessionUser, Subdomain } from '@/types';
+import { DOMAIN_SUBDOMAINS } from '@/types';
 
-interface Attendee { name: string; role: string }
+interface Attendee { name: string; role: string; memberId?: string }
 interface MoMStructured { agenda: string[]; discussion: { title: string; points: string[] }[] }
+
+const SCOPE_LABELS: Record<MoMScope, string> = {
+  CORE_TEAM: 'Core Team',
+  DOMAIN: 'Domain',
+  SUBDOMAIN: 'Sub-Domain',
+};
+
+const DOMAINS: Domain[] = ['Technical', 'Corporate', 'Creatives'];
 
 function formatDateForDisplay(iso: string) {
   if (!iso) return '';
@@ -60,6 +69,7 @@ export default function MoMPage() {
   const [step, setStep] = useState<'form' | 'preview'>('form');
   const [drafting, setDrafting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [structured, setStructured] = useState<MoMStructured | null>(null);
   const [feedback, setFeedback] = useState('');
 
@@ -74,6 +84,9 @@ export default function MoMPage() {
     platform: 'Online',
     reviewedBy: '',
     scribeRaw: '',
+    scope: 'SUBDOMAIN' as MoMScope,
+    meetingDomain: '' as Domain | '',
+    meetingSubdomain: '' as Subdomain | '',
   });
   const [startTime, setStartTime] = useState('');
   const [startPeriod, setStartPeriod] = useState<'AM' | 'PM'>('PM');
@@ -81,11 +94,23 @@ export default function MoMPage() {
   const [endPeriod, setEndPeriod] = useState<'AM' | 'PM'>('PM');
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.success) setMe(d.data); });
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.success) {
+        setMe(d.data);
+        const u = d.data as SessionUser;
+        // Pre-fill scope + domain/subdomain from the logged-in user's role
+        if (u.domain) setForm(f => ({ ...f, meetingDomain: u.domain as Domain }));
+        if (u.subdomain) setForm(f => ({ ...f, meetingSubdomain: u.subdomain as Subdomain }));
+      }
+    });
     fetch('/api/members').then(r => r.json()).then(d => { if (d.success) setMembers(d.data); });
   }, []);
 
   const preparedBy = me ? `${me.name} - ${formatRole(me.role, me.domain)}` : '';
+
+  const subdomains: Subdomain[] = form.meetingDomain
+    ? (DOMAIN_SUBDOMAINS[form.meetingDomain as Exclude<Domain, 'General'>] ?? [])
+    : [];
 
   const addedNames = useMemo(() => new Set(attendees.map(a => a.name.toLowerCase())), [attendees]);
   const pickableMembers = useMemo(() => members.filter(m => !addedNames.has(m.name.toLowerCase())), [members, addedNames]);
@@ -93,7 +118,7 @@ export default function MoMPage() {
   function addMember(memberId: string) {
     const m = members.find(x => x.memberId === memberId);
     if (!m) return;
-    setAttendees(a => [...a, { name: m.name, role: formatRole(m.role, m.domain) }]);
+    setAttendees(a => [...a, { name: m.name, role: formatRole(m.role, m.domain), memberId: m.memberId }]);
     setPickerValue('');
   }
 
@@ -107,10 +132,8 @@ export default function MoMPage() {
 
   function findMemberByName(raw: string): Member | null {
     const n = normalizeName(raw);
-    // exact match first
     const exact = members.find(m => normalizeName(m.name) === n);
     if (exact) return exact;
-    // partial: pasted name starts-with or is contained in DB name (handles truncation/initials)
     return members.find(m => {
       const d = normalizeName(m.name);
       return d.startsWith(n) || n.startsWith(d);
@@ -128,7 +151,7 @@ export default function MoMPage() {
         const cleaned = line.replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
         if (!cleaned || seen.has(normalizeName(cleaned))) continue;
         const match = findMemberByName(cleaned);
-        next.push({ name: match ? match.name : cleaned, role: match ? formatRole(match.role, match.domain) : '' });
+        next.push({ name: match ? match.name : cleaned, role: match ? formatRole(match.role, match.domain) : '', memberId: match?.memberId });
         seen.add(normalizeName(match ? match.name : cleaned));
         added++;
         if (!match) unmatched++;
@@ -154,11 +177,28 @@ export default function MoMPage() {
     return start ? `${start} ${startPeriod}` : '';
   }
 
+  function buildPayload(time: string) {
+    return {
+      ...form,
+      time,
+      date: form.date,
+      preparedBy,
+      preparedByMemberId: me?.memberId,
+      attendees,
+      agenda: structured!.agenda,
+      discussion: structured!.discussion,
+      meetingDomain: form.scope !== 'CORE_TEAM' ? form.meetingDomain || null : null,
+      meetingSubdomain: form.scope === 'SUBDOMAIN' ? form.meetingSubdomain || null : null,
+    };
+  }
+
   async function handlePreview(e: React.FormEvent) {
     e.preventDefault();
     if (!form.scribeRaw.trim()) { toast.error('Paste the meeting notes/scribe first'); return; }
     if (attendees.length === 0) { toast.error('Add at least one attendee'); return; }
     if (form.date && form.date > todayStr) { toast.error("Meeting date can't be in the future — minutes are written for a meeting that already happened"); return; }
+    if (form.scope !== 'CORE_TEAM' && !form.meetingDomain) { toast.error('Select a domain for this meeting'); return; }
+    if (form.scope === 'SUBDOMAIN' && !form.meetingSubdomain) { toast.error('Select a sub-domain for this meeting'); return; }
     const time = buildTimeRange();
     if (time === null) return;
     setStartTime(prev => prev ? normalizeTime(prev) : prev);
@@ -244,6 +284,32 @@ export default function MoMPage() {
     }
   }
 
+  async function handleUploadAndSave() {
+    if (!structured) return;
+    const time = buildTimeRange();
+    if (time === null) return;
+    setUploading(true);
+    try {
+      const res = await fetch('/api/moms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload(time)),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Failed to upload MoM'); return; }
+      toast.success(
+        <span>
+          MoM saved to Drive!{' '}
+          <a href={data.data.driveViewUrl} target="_blank" rel="noopener noreferrer" className="underline">Open ↗</a>
+        </span>
+      );
+    } catch {
+      toast.error('Failed to upload MoM');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   if (!me) {
     return (
       <div className="flex justify-center py-16">
@@ -268,7 +334,7 @@ export default function MoMPage() {
           <Button type="button" variant="ghost" size="icon" onClick={() => setStep('form')}><ArrowLeft size={18} /></Button>
           <div>
             <h1 className="text-2xl font-bold text-[#f0f0f0] uppercase tracking-wide">Preview</h1>
-            <p className="text-sm text-[#666] font-mono">Check the draft, request changes, then download</p>
+            <p className="text-sm text-[#666] font-mono">Check the draft, request changes, then save or download</p>
           </div>
         </div>
 
@@ -314,12 +380,16 @@ export default function MoMPage() {
           </CardContent>
         </Card>
 
-        <div className="flex gap-3">
-          <Button type="button" variant="outline" className="flex-1" onClick={() => setStep('form')}>Back to Edit</Button>
-          <Button type="button" className="flex-1" onClick={handleDownload} disabled={downloading || drafting}>
-            {downloading ? <><Loader2 size={16} className="animate-spin" /> Generating PDF...</> : <><FileDown size={16} /> Download PDF</>}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Button type="button" variant="outline" onClick={() => setStep('form')}>Back to Edit</Button>
+          <Button type="button" variant="outline" onClick={handleDownload} disabled={downloading || drafting}>
+            {downloading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : <><FileDown size={16} /> Download PDF</>}
+          </Button>
+          <Button type="button" onClick={handleUploadAndSave} disabled={uploading || drafting}>
+            {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Save to Drive</>}
           </Button>
         </div>
+        <p className="text-xs text-[#555] font-mono text-center">"Save to Drive" uploads the PDF to the centralized MoMs folder and records it in the dashboard — visible to all attendees.</p>
       </div>
     );
   }
@@ -329,8 +399,8 @@ export default function MoMPage() {
       <div className="flex items-center gap-3">
         <NotebookPen size={22} className="text-[#FF9900]" />
         <div>
-          <h1 className="text-2xl font-bold text-[#f0f0f0] uppercase tracking-wide">Minutes of Meeting</h1>
-          <p className="text-sm text-[#666] font-mono">Paste your notes, preview the draft, then generate the PDF</p>
+          <h1 className="text-2xl font-bold text-[#f0f0f0] uppercase tracking-wide">Generate MoM</h1>
+          <p className="text-sm text-[#666] font-mono">Paste your notes, preview the draft, then save or download</p>
         </div>
       </div>
 
@@ -388,10 +458,7 @@ export default function MoMPage() {
             </div>
             <div className="space-y-2">
               <Label>Reviewed By</Label>
-              <Select
-                value={form.reviewedBy}
-                onValueChange={v => setForm(f => ({ ...f, reviewedBy: v }))}
-              >
+              <Select value={form.reviewedBy} onValueChange={v => setForm(f => ({ ...f, reviewedBy: v }))}>
                 <SelectTrigger><SelectValue placeholder="Select a member (optional)" /></SelectTrigger>
                 <SelectContent>
                   {members.filter(m => m.isActive).map(m => (
@@ -402,6 +469,40 @@ export default function MoMPage() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Scope */}
+            <div className="space-y-2">
+              <Label>Meeting Scope</Label>
+              <Select value={form.scope} onValueChange={v => setForm(f => ({ ...f, scope: v as MoMScope, meetingSubdomain: '' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CORE_TEAM">Core Team</SelectItem>
+                  <SelectItem value="DOMAIN">Domain</SelectItem>
+                  <SelectItem value="SUBDOMAIN">Sub-Domain</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.scope !== 'CORE_TEAM' && (
+              <div className="space-y-2">
+                <Label>Domain</Label>
+                <Select value={form.meetingDomain} onValueChange={v => setForm(f => ({ ...f, meetingDomain: v as Domain, meetingSubdomain: '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select domain" /></SelectTrigger>
+                  <SelectContent>
+                    {DOMAINS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {form.scope === 'SUBDOMAIN' && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Sub-Domain</Label>
+                <Select value={form.meetingSubdomain} onValueChange={v => setForm(f => ({ ...f, meetingSubdomain: v as Subdomain }))} disabled={!form.meetingDomain}>
+                  <SelectTrigger><SelectValue placeholder={form.meetingDomain ? 'Select sub-domain' : 'Select a domain first'} /></SelectTrigger>
+                  <SelectContent>
+                    {subdomains.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </CardContent>
         </Card>
 
