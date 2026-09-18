@@ -55,7 +55,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const [backfilling, setBackfilling] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const filtered = useMemo(() => members.filter(m => {
@@ -152,24 +151,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
       setEditTarget(null);
     } catch { toast.error('Failed to update member'); }
     finally { setSaving(false); }
-  }
-
-  async function backfillDriveFolders() {
-    setBackfilling(true);
-    try {
-      const res = await fetch('/api/members/drive-backfill', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Backfill failed'); return; }
-      const { created, failed, total } = data.data;
-      if (total === 0) toast.success('All members already have Drive folders');
-      else if (failed === 0) toast.success(`Created ${created} Drive folder${created !== 1 ? 's' : ''}`);
-      else toast.warning(`Created ${created}, failed ${failed} of ${total}`);
-      // Reload to reflect new driveFolderIds
-      const membersRes = await fetch('/api/members');
-      const membersData = await membersRes.json();
-      if (membersData.success) setMembers(membersData.data);
-    } catch { toast.error('Backfill failed'); }
-    finally { setBackfilling(false); }
   }
 
   async function syncToSheet() {
@@ -326,10 +307,6 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
             {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Sync to Sheet
           </Button>
-          <Button variant="outline" size="sm" onClick={backfillDriveFolders} disabled={backfilling}>
-            {backfilling ? <Loader2 size={14} className="animate-spin" /> : <FolderSync size={14} />}
-            Backfill Drive Folders
-          </Button>
           <Button onClick={() => setShowAdd(true)}><Plus size={16} /> Add Member</Button>
         </div>
       </div>
@@ -388,21 +365,19 @@ export default function ManageMembersClient({ me, initialMembers }: { me: Sessio
                   <td className="px-4 py-3 text-xs text-[#f0f0f0] font-mono">{member.clubId}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-center">
-                      {member.subdomain ? (
-                        member.driveFolderId ? (
-                          <a
-                            href={`https://drive.google.com/drive/folders/${member.driveFolderId}`}
-                            target="_blank" rel="noopener noreferrer"
-                            title="Open Drive folder"
-                            className="text-green-400 hover:text-green-300 transition-colors"
-                          >
-                            <FolderOpen size={15} />
-                          </a>
-                        ) : (
-                          <span title="No Drive folder yet" className="text-[#555]"><FolderSync size={15} /></span>
-                        )
+                      {member.role === 'SBG_LEADER' || member.role === 'SECRETARY' ? (
+                        <span className="text-[#333]">—</span>
+                      ) : member.driveFolderId ? (
+                        <a
+                          href={`https://drive.google.com/drive/folders/${member.driveFolderId}`}
+                          target="_blank" rel="noopener noreferrer"
+                          title="Open Drive folder"
+                          className="text-green-400 hover:text-green-300 transition-colors"
+                        >
+                          <FolderOpen size={15} />
+                        </a>
                       ) : (
-                        <span title="No subdomain — Drive folder not applicable" className="text-[#333]">—</span>
+                        <span title="Drive folder pending" className="text-[#555]"><FolderSync size={15} /></span>
                       )}
                     </div>
                   </td>

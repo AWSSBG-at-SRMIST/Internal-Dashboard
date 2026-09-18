@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await db.send(new ScanCommand({ TableName: TABLE.MEMBERS }));
     const all = (result.Items || []) as Member[];
-    const pending = all.filter(m => m.isActive !== false && m.subdomain && !m.driveFolderId);
+    const pending = all.filter(m => m.isActive !== false && m.clubId && !m.driveFolderId);
 
     let created = 0;
     let failed = 0;

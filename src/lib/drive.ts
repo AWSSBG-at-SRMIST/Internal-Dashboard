@@ -43,44 +43,65 @@ async function findChildFolder(
   return id;
 }
 
-// Creates Domains/{domain}/{subdomain}/{clubId}/ and shares it with the
-// member's personal email (falls back to officialEmail).
+// Like findChildFolder but creates the folder if it doesn't exist yet.
+// Used for intermediate parent folders (e.g. "Presidium/" under Domains/).
+async function findOrCreateChildFolder(
+  drive: drive_v3.Drive,
+  parentId: string,
+  name: string,
+): Promise<string> {
+  const existing = await findChildFolder(drive, parentId, name);
+  if (existing) return existing;
+  const created = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+    fields: 'id',
+  });
+  const id = created.data.id!;
+  folderCache.set(`${parentId}:${name}`, id);
+  return id;
+}
+
+// Folder path by role:
+//   Director           → Domains/{Domain}/{clubId}/
+//   Manager/Associate/Builder → Domains/{Domain}/{Subdomain}/{clubId}/
+// Presidium members do not get personal Drive folders.
 // Returns { folderId, permissionId } on success, null if Drive is not
-// configured or the parent folders can't be found.
+// configured, role is Presidium, or required fields are missing.
 // Best-effort — never throws.
 export async function createMemberDriveFolder(
   member: Member,
 ): Promise<{ folderId: string; permissionId?: string } | null> {
-  if (!member.domain || !member.subdomain || !member.clubId) return null;
+  if (member.role === 'SBG_LEADER' || member.role === 'SECRETARY') return null;
+  if (!member.clubId || !member.domain) return null;
   const drive = getDriveClient();
   if (!drive) return null;
 
   try {
-    const domainId = await findChildFolder(drive, DOMAINS_FOLDER_ID!, member.domain);
-    if (!domainId) {
-      console.error(`Drive: domain folder "${member.domain}" not found under Domains/`);
-      return null;
-    }
+    let parentId: string;
 
-    const subdomainId = await findChildFolder(drive, domainId, member.subdomain);
-    if (!subdomainId) {
-      console.error(`Drive: subdomain folder "${member.subdomain}" not found under ${member.domain}/`);
-      return null;
+    if (member.role === 'DIRECTOR') {
+      parentId = await findOrCreateChildFolder(drive, DOMAINS_FOLDER_ID!, member.domain);
+    } else {
+      // MANAGER / ASSOCIATE / BUILDER
+      if (!member.subdomain) return null;
+      const domainId = await findOrCreateChildFolder(drive, DOMAINS_FOLDER_ID!, member.domain);
+      parentId = await findOrCreateChildFolder(drive, domainId, member.subdomain);
     }
 
     const created = await drive.files.create({
       requestBody: {
         name: member.clubId,
         mimeType: 'application/vnd.google-apps.folder',
-        parents: [subdomainId],
+        parents: [parentId],
       },
       fields: 'id',
     });
     const folderId = created.data.id!;
 
     let permissionId: string | undefined;
-    const shareEmail = member.personalEmail || member.officialEmail;
+    const shareEmail = member.officialEmail;
     if (shareEmail) {
+      const location = member.role === 'DIRECTOR' ? member.domain : member.subdomain!;
       const perm = await drive.permissions.create({
         fileId: folderId,
         requestBody: { type: 'user', role: 'writer', emailAddress: shareEmail },
@@ -88,7 +109,7 @@ export async function createMemberDriveFolder(
         sendNotificationEmail: true,
         emailMessage:
           `Hi ${member.name}, your personal AWS SBG work folder has been created in the club Drive. ` +
-          `Use it to store your deliverables, project files, and work for ${member.subdomain}. ` +
+          `Use it to store your deliverables, project files, and work for ${location}. ` +
           `Your Club ID: ${member.clubId}`,
       });
       permissionId = perm.data.id ?? undefined;

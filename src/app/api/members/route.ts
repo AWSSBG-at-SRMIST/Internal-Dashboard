@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     // Drive folder creation is fire-and-forget — the DynamoDB record is the
     // source of truth; a folder failure never blocks the member creation.
-    if (member.domain && member.subdomain) {
+    if (member.clubId) {
       createMemberDriveFolder(member).then(async result => {
         if (!result) return;
         await db.send(new UpdateCommand({

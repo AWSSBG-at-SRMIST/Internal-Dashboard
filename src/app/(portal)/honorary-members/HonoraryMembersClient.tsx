@@ -15,6 +15,7 @@ import type { HonoraryMember, HonoraryTag } from '@/types';
 
 const TAG_LABELS: Record<HonoraryTag, string> = {
   FACULTY_MENTOR: 'Faculty Mentor',
+  FACULTY_CONVENER: 'Faculty Convener',
   INDUSTRIAL_MENTOR: 'Industrial Mentor',
   ADVISORY: 'Advisory Committee',
   FOUNDING_MEMBER: 'Founding Member',
@@ -22,6 +23,7 @@ const TAG_LABELS: Record<HonoraryTag, string> = {
 
 const TAG_GROUPS: { tag: HonoraryTag; label: string }[] = [
   { tag: 'FACULTY_MENTOR', label: 'Faculty Mentors' },
+  { tag: 'FACULTY_CONVENER', label: 'Faculty Conveners' },
   { tag: 'INDUSTRIAL_MENTOR', label: 'Industrial Mentors' },
   { tag: 'ADVISORY', label: 'Advisory Committee' },
   { tag: 'FOUNDING_MEMBER', label: 'Founding Members' },

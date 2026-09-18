@@ -191,7 +191,7 @@ export type VaultEntrySummary = Omit<VaultEntry, 'encryptedValue' | 'iv' | 'auth
 // who never log in to the dashboard, shown on the public website's Team page
 // (sbg-honorary-members table, read directly by Official-Website) but managed
 // here since Presidium is the only party with edit rights on either side.
-export type HonoraryTag = 'FACULTY_MENTOR' | 'INDUSTRIAL_MENTOR' | 'FOUNDING_MEMBER' | 'ADVISORY';
+export type HonoraryTag = 'FACULTY_MENTOR' | 'FACULTY_CONVENER' | 'INDUSTRIAL_MENTOR' | 'FOUNDING_MEMBER' | 'ADVISORY';
 
 export interface HonoraryMember {
   id: string;
