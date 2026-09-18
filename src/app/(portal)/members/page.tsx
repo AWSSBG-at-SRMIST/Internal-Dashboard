@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getActiveMembers } from '@/lib/members';
+import { MembersTabs } from '@/components/ui/members-tabs';
 import MembersClient from './MembersClient';
 
 export default async function MembersPage() {
@@ -9,5 +10,10 @@ export default async function MembersPage() {
 
   const members = await getActiveMembers(user);
 
-  return <MembersClient initialMembers={members} />;
+  return (
+    <div>
+      <MembersTabs user={user} />
+      <MembersClient initialMembers={members} />
+    </div>
+  );
 }

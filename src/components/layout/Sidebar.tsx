@@ -4,10 +4,10 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, NotebookPen, LogOut, Menu, X, Download, Lock, Activity, Mail, UserCog, AlertTriangle, Award, BookOpen
+  FileText, LogOut, Menu, X, Download, Lock, Activity, Mail, AlertTriangle, Award, BookOpen
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
-import { canGenerateMoM, canAccessSponsorshipMail, canEditMembers } from '@/lib/permissions';
+import { canAccessSponsorshipMail } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 import { useState } from 'react';
 
@@ -23,11 +23,8 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={18} /> },
   { label: 'Tasks', href: '/tasks', icon: <CheckSquare size={18} /> },
   { label: 'Members', href: '/members', icon: <Users size={18} /> },
-  // Presidium + HR & Admin Manager/Associate: add/edit/permanently-delete members.
-  { label: 'Manage Members', href: '/members/manage', icon: <UserCog size={18} />, visible: canEditMembers },
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
-  { label: 'Generate MoM', href: '/mom', icon: <NotebookPen size={18} />, visible: canGenerateMoM },
   { label: 'Minutes of Meetings', href: '/minutes-of-meetings', icon: <BookOpen size={18} /> },
   // Sponsorship & Finance only (Manager/Associate/Builder all included).
   { label: 'Sponsorship Outreach', href: '/sponsorship-outreach', icon: <Mail size={18} />, visible: canAccessSponsorshipMail },
@@ -39,11 +36,6 @@ const navItems: NavItem[] = [
   // Presidium-only tier, grouped together at the end so the list reads as
   // increasingly restricted rather than interleaving privilege levels.
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
-  { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
-  { label: 'Member Activity', href: '/activity', icon: <Activity size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
-  // Faculty/Industry mentors & founding members shown on the public website's
-  // Team page — Presidium-only since only they manage that roster.
-  { label: 'Honorary Members', href: '/honorary-members', icon: <Award size={18} />, roles: ['SBG_LEADER', 'SECRETARY'] },
   { label: 'Install App', href: '/install', icon: <Download size={18} /> },
 ];
 

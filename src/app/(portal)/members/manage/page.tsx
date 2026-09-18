@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { canEditMembers } from '@/lib/permissions';
 import { getAllMembersForAdmin } from '@/lib/members';
+import { MembersTabs } from '@/components/ui/members-tabs';
 import ManageMembersClient from './ManageMembersClient';
 
 export default async function ManageMembersPage() {
@@ -11,5 +12,10 @@ export default async function ManageMembersPage() {
 
   const members = await getAllMembersForAdmin();
 
-  return <ManageMembersClient me={user} initialMembers={members} />;
+  return (
+    <div>
+      <MembersTabs user={user} />
+      <ManageMembersClient me={user} initialMembers={members} />
+    </div>
+  );
 }

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { isPresidium } from '@/lib/permissions';
 import { getHonoraryMembers } from '@/lib/honorary';
+import { MembersTabs } from '@/components/ui/members-tabs';
 import HonoraryMembersClient from './HonoraryMembersClient';
 
 export default async function HonoraryMembersPage() {
@@ -11,5 +12,10 @@ export default async function HonoraryMembersPage() {
 
   const members = await getHonoraryMembers();
 
-  return <HonoraryMembersClient initialMembers={members} />;
+  return (
+    <div>
+      <MembersTabs user={user} />
+      <HonoraryMembersClient initialMembers={members} />
+    </div>
+  );
 }

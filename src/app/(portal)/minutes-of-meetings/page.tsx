@@ -1,12 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { BookOpen, Loader2, ExternalLink, Trash2, ChevronDown } from 'lucide-react';
+import { BookOpen, Loader2, ExternalLink, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { isPresidium } from '@/lib/permissions';
+import { isPresidium, canGenerateMoM } from '@/lib/permissions';
+import Link from 'next/link';
 import type { MoM, MoMScope, SessionUser } from '@/types';
 
 const SCOPE_LABELS: Record<MoMScope, string> = {
@@ -91,8 +92,14 @@ export default function MinutesOfMeetingsPage() {
             </p>
           </div>
         </div>
-        {/* Scope filter chips */}
-        <div className="flex flex-wrap gap-2">
+        {me && canGenerateMoM(me) && (
+          <Link href="/mom">
+            <Button><Plus size={16} /> Generate New MoM</Button>
+          </Link>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
           {(['ALL', 'CORE_TEAM', 'DOMAIN', 'SUBDOMAIN'] as const).map(s => (
             <button
               key={s}
@@ -106,7 +113,6 @@ export default function MinutesOfMeetingsPage() {
               {s === 'ALL' ? 'All' : SCOPE_LABELS[s]}
             </button>
           ))}
-        </div>
       </div>
 
       {loading ? (

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { isPresidium } from '@/lib/permissions';
 import { getAnalyticsData } from '@/lib/analytics';
+import { AnalyticsTabs } from '@/components/ui/analytics-tabs';
 import AnalyticsCharts from './AnalyticsCharts';
 
 export default async function AnalyticsPage() {
@@ -11,5 +12,10 @@ export default async function AnalyticsPage() {
 
   const analytics = await getAnalyticsData();
 
-  return <AnalyticsCharts analytics={analytics} />;
+  return (
+    <div>
+      <AnalyticsTabs />
+      <AnalyticsCharts analytics={analytics} />
+    </div>
+  );
 }
