@@ -151,17 +151,18 @@ export default function MoMPage() {
         const cleaned = line.replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
         if (!cleaned || seen.has(normalizeName(cleaned))) continue;
         const match = findMemberByName(cleaned);
-        next.push({ name: match ? match.name : cleaned, role: match ? formatRole(match.role, match.domain) : '', memberId: match?.memberId });
-        seen.add(normalizeName(match ? match.name : cleaned));
+        if (!match) { unmatched++; continue; }
+        next.push({ name: match.name, role: formatRole(match.role, match.domain), memberId: match.memberId });
+        seen.add(normalizeName(match.name));
         added++;
-        if (!match) unmatched++;
       }
       return next;
     });
     setPasteText('');
     setShowPaste(false);
-    if (added === 0) { toast.error('No new names found to import'); return; }
-    toast.success(`Imported ${added} attendee${added === 1 ? '' : 's'}${unmatched ? ` — ${unmatched} not found in members list (role left blank)` : ''}`);
+    if (added === 0 && unmatched === 0) { toast.error('No new names found to import'); return; }
+    if (added === 0) { toast.error(`None of the ${unmatched} name${unmatched === 1 ? '' : 's'} matched club members`); return; }
+    toast.success(`Imported ${added} attendee${added === 1 ? '' : 's'}${unmatched ? ` — ${unmatched} skipped (not in members list)` : ''}`);
   }
 
   function buildTimeRange(): string | null {
