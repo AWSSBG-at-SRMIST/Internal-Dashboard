@@ -10,6 +10,7 @@ export function MembersTabs({ user }: { user: SessionUser }) {
 
   const tabs = [
     { label: 'Directory', href: '/members', always: true },
+    { label: 'Free Slots', href: '/free-slots', always: true },
     { label: 'Manage', href: '/members/manage', show: canEditMembers(user) },
     { label: 'Honorary', href: '/honorary-members', show: isPresidium(user) },
   ].filter(t => t.always || t.show);

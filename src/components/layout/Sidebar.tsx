@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CheckSquare, Users, Link2, Trophy, BarChart3,
-  FileText, LogOut, Menu, X, Download, Lock, Activity, Mail, AlertTriangle, Award, BookOpen, Calendar
+  FileText, LogOut, Menu, X, Download, Lock, Activity, Mail, AlertTriangle, Award, BookOpen
 } from 'lucide-react';
 import { cn, formatRole } from '@/lib/utils';
 import { canAccessSponsorshipMail } from '@/lib/permissions';
@@ -26,7 +26,6 @@ const navItems: NavItem[] = [
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
   { label: 'Minutes of Meetings', href: '/minutes-of-meetings', icon: <BookOpen size={18} /> },
-  { label: 'Free Slots', href: '/free-slots', icon: <Calendar size={18} /> },
   // Sponsorship & Finance only (Manager/Associate/Builder all included).
   { label: 'Sponsorship Outreach', href: '/sponsorship-outreach', icon: <Mail size={18} />, visible: canAccessSponsorshipMail },
   // Director-tier (Presidium always sees it too): Presidium/Directors always;

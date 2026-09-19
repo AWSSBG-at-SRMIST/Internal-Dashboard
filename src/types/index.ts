@@ -241,6 +241,7 @@ export interface AuditLog {
 
 export interface SessionUser {
   memberId: string;
+  clubId: string;
   name: string;
   email: string;
   role: Role;

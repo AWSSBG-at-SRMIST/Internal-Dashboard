@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { isPresidium } from '@/lib/permissions';
 import { db, TABLE, GetCommand } from '@/lib/dynamodb';
+import { MembersTabs } from '@/components/ui/members-tabs';
 import FreeSlotsClient from './FreeSlotsClient';
 
 export default async function FreeSlotsPage() {
@@ -17,5 +18,10 @@ export default async function FreeSlotsPage() {
     mySlots = result.Item?.slots ?? [];
   }
 
-  return <FreeSlotsClient user={user} initialMySlots={mySlots} />;
+  return (
+    <div>
+      <MembersTabs user={user} />
+      <FreeSlotsClient user={user} initialMySlots={mySlots} />
+    </div>
+  );
 }

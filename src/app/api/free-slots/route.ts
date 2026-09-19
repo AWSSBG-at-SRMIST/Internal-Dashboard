@@ -8,13 +8,33 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (user.role === 'BUILDER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const result = await db.send(new ScanCommand({ TableName: TABLE.FREE_SLOTS }));
-  let records = result.Items || [];
+  // Fetch slot records and member directory in parallel
+  const [slotsRes, membersRes] = await Promise.all([
+    db.send(new ScanCommand({ TableName: TABLE.FREE_SLOTS })),
+    db.send(new ScanCommand({
+      TableName: TABLE.MEMBERS,
+      ProjectionExpression: 'memberId, #n, #d, subdomain',
+      ExpressionAttributeNames: { '#n': 'name', '#d': 'domain' },
+    })),
+  ]);
 
+  const memberMap = new Map((membersRes.Items || []).map((m: any) => [m.memberId, m]));
+
+  // Join: enrich slot records with live name/domain/subdomain from sbg-members
+  let records = (slotsRes.Items || [])
+    .map((r: any) => {
+      const m = memberMap.get(r.memberId);
+      if (!m) return null;
+      return { memberId: r.memberId, clubId: r.clubId, memberName: m.name, domain: m.domain ?? null, subdomain: m.subdomain ?? null, slots: r.slots };
+    })
+    .filter(Boolean);
+
+  // Scope filter
   if (!isPresidium(user)) {
     if (user.role === 'DIRECTOR') {
       records = records.filter((r: any) => r.domain === user.domain);
     } else {
+      // Manager / Associate — subdomain only
       records = records.filter((r: any) => r.subdomain === user.subdomain);
     }
   }
@@ -31,13 +51,12 @@ export async function POST(req: NextRequest) {
   const { slots } = body;
   if (!Array.isArray(slots)) return NextResponse.json({ error: 'Invalid slots' }, { status: 400 });
 
+  // Lean record — no denormalized name/domain/subdomain
   await db.send(new PutCommand({
     TableName: TABLE.FREE_SLOTS,
     Item: {
       memberId: user.memberId,
-      memberName: user.name,
-      domain: user.domain ?? null,
-      subdomain: user.subdomain ?? null,
+      clubId: user.clubId,
       slots,
       updatedAt: new Date().toISOString(),
     },
