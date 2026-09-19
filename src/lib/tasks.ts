@@ -54,7 +54,7 @@ export const NO_SUBMISSION_PENALTY = -2;
 const GRACE_MS = 24 * 60 * 60 * 1000;
 
 const SYSTEM_ACTOR: SessionUser = {
-  memberId: 'SYSTEM_CRON', name: 'System (Auto-Close)', email: 'system@internal',
+  memberId: 'SYSTEM_CRON', clubId: 'SYSTEM', name: 'System (Auto-Close)', email: 'system@internal',
   role: 'SBG_LEADER', domain: null, subdomain: null,
 };
 

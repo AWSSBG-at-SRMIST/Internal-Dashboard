@@ -14,7 +14,7 @@ import { timingSafeEqual } from 'crypto';
 export const maxDuration = 60;
 
 const SYSTEM_ACTOR: SessionUser = {
-  memberId: 'SYSTEM_CRON', name: 'System (Reminder Cron)', email: 'system@internal',
+  memberId: 'SYSTEM_CRON', clubId: 'SYSTEM', name: 'System (Reminder Cron)', email: 'system@internal',
   role: 'SBG_LEADER', domain: null, subdomain: null,
 };
 
