@@ -18,7 +18,12 @@ export async function GET() {
 
     const visible = isPresidium(user)
       ? all
-      : all.filter(m => m.attendeeMemberIds?.includes(user.memberId));
+      : all.filter(m => {
+          if (m.scope === 'CORE_TEAM') return true;
+          if (m.scope === 'DOMAIN') return m.domain === user.domain;
+          if (m.scope === 'SUBDOMAIN') return m.domain === user.domain && m.subdomain === user.subdomain;
+          return false;
+        });
 
     visible.sort((a, b) => (b.date > a.date ? 1 : -1));
 
