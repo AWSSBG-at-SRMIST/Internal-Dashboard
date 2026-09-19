@@ -309,9 +309,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
     }));
     const subs = subsResult.Items || [];
     if (subs.length > 0) {
-      // Reverse rating effects before deleting — each approved submission added
-      // stars to the member's total; deletion must undo that.
-      await Promise.all(subs.map((s: any) => reverseSubmissionRating(s)));
+      // Reverse rating effects before deleting. allSettled so a missing member
+      // record (member deleted after submitting) doesn't abort the task deletion.
+      await Promise.allSettled(subs.map((s: any) => reverseSubmissionRating(s)));
       await Promise.all(subs.map((s: any) =>
         db.send(new DeleteCommand({ TableName: TABLE.SUBMISSIONS, Key: { submissionId: s.submissionId } }))
       ));
