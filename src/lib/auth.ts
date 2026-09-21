@@ -100,7 +100,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   return getSession(token);
 }
 
-export function setSessionCookie(token: string): { name: string; value: string; httpOnly: boolean; secure: boolean; sameSite: 'lax'; maxAge: number; path: string } {
+export function setSessionCookie(token: string): { name: string; value: string; httpOnly: boolean; secure: boolean; sameSite: 'lax'; maxAge: number; path: string; domain?: string } {
   return {
     name: SESSION_COOKIE,
     value: token,
@@ -112,6 +112,11 @@ export function setSessionCookie(token: string): { name: string; value: string; 
     sameSite: 'lax',
     maxAge: SESSION_TTL,
     path: '/',
+    // Shared across subdomains in production so a session created here (or
+    // by Forms-Portal, which writes to this same sbg-sessions table) is
+    // valid on both awssbg-srmist.in apps — undefined in dev so host-only
+    // localhost cookies keep working normally across different local ports.
+    domain: process.env.NODE_ENV === 'production' ? '.awssbg-srmist.in' : undefined,
   };
 }
 
