@@ -29,6 +29,8 @@ export const TABLE = {
   HONORARY_MEMBERS: 'sbg-honorary-members',
   MOMS: 'sbg-moms',
   FREE_SLOTS: 'sbg-free-slots',
+  FORMS: 'sbg-forms',
+  FORM_RESPONSES: 'sbg-forms-responses',
 } as const;
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand, BatchWriteCommand, TransactWriteCommand };

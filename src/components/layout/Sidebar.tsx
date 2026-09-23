@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { label: 'Leaderboard', href: '/leaderboard', icon: <Trophy size={18} /> },
   { label: 'Link Shortener', href: '/links', icon: <Link2 size={18} />, roles: ['SBG_LEADER', 'SECRETARY', 'DIRECTOR', 'MANAGER', 'ASSOCIATE'] },
   { label: 'Minutes of Meetings', href: '/minutes-of-meetings', icon: <BookOpen size={18} /> },
+  { label: 'Forms', href: '/forms', icon: <FileText size={18} /> },
   // Sponsorship & Finance only (Manager/Associate/Builder all included).
   { label: 'Sponsorship Outreach', href: '/sponsorship-outreach', icon: <Mail size={18} />, visible: canAccessSponsorshipMail },
   // Director-tier (Presidium always sees it too): Presidium/Directors always;

@@ -4,7 +4,7 @@ import type { Member, MoMScope } from '@/types';
 
 const DOMAINS_FOLDER_ID = process.env.DRIVE_DOMAINS_FOLDER_ID;
 
-function getDriveClient(): drive_v3.Drive | null {
+export function getDriveClient(): drive_v3.Drive | null {
   const email = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
   const key = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
   if (!email || !key) return null;
@@ -203,5 +203,117 @@ export async function trashDriveFile(fileId: string): Promise<void> {
     await drive.files.update({ fileId, requestBody: { trashed: true } });
   } catch (err) {
     console.error('Drive: trashDriveFile failed', err);
+  }
+}
+
+// ─── Forms ──────────────────────────────────────────────────────────────────
+
+const FORMS_FOLDER_ID = process.env.DRIVE_FORMS_FOLDER_ID;
+
+// Root "Forms/{title} ({shortId})" folder for a given form, used both for
+// the linked response Sheet and for anonymous-respondent file uploads.
+// Returns null if Drive isn't configured — callers must treat that as a
+// silent no-op, never a failure (DynamoDB is always the source of truth).
+export async function getOrCreateFormFolder(title: string, formId: string): Promise<string | null> {
+  if (!FORMS_FOLDER_ID) return null;
+  const drive = getDriveClient();
+  if (!drive) return null;
+  try {
+    const folderName = `${title} (${formId.slice(0, 8)})`;
+    return await findOrCreateChildFolder(drive, FORMS_FOLDER_ID, folderName);
+  } catch (err) {
+    console.error('Drive: getOrCreateFormFolder failed', err);
+    return null;
+  }
+}
+
+// Uploads a file directly into a member's own personal Drive folder —
+// reusing the folder this app already created for them when they joined —
+// never creates a new personal folder or subfolder here, only reads
+// member.driveFolderId. Deliberately not nested per-form: a member's own
+// folder should stay one place, not fragmented by which form the file came
+// from.
+export async function uploadToMemberFolder(
+  memberDriveFolderId: string,
+  filename: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<{ fileId: string; viewUrl: string } | null> {
+  const drive = getDriveClient();
+  if (!drive) return null;
+  try {
+    const res = await drive.files.create({
+      requestBody: { name: filename, parents: [memberDriveFolderId] },
+      media: { mimeType, body: Readable.from(buffer) },
+      fields: 'id,webViewLink',
+    });
+    return { fileId: res.data.id!, viewUrl: res.data.webViewLink! };
+  } catch (err) {
+    console.error('Drive: uploadToMemberFolder failed', err);
+    return null;
+  }
+}
+
+// Grants a real Drive "reader" (or "writer") permission on a file/sheet to
+// one person's SRM email — this is what actually lets a form's creator (and
+// the hierarchy above them) see attachments that otherwise sit inside a
+// respondent's own personal folder they have no access to. Silent
+// notification-free by design since this can fire many times as responses
+// come in, not a one-off onboarding share.
+export async function shareFile(fileId: string, email: string, role: 'reader' | 'writer' = 'reader'): Promise<string | null> {
+  const drive = getDriveClient();
+  if (!drive) return null;
+  try {
+    const perm = await drive.permissions.create({
+      fileId,
+      requestBody: { type: 'user', role, emailAddress: email },
+      fields: 'id',
+      sendNotificationEmail: false,
+    });
+    return perm.data.id ?? null;
+  } catch (err) {
+    console.error('Drive: shareFile failed', err);
+    return null;
+  }
+}
+
+// Revokes a previously-granted permission — called when someone no longer
+// qualifies as a viewer (left the club, moved out of the hierarchy, lost
+// editor access). Best-effort, never throws.
+export async function unshareFile(fileId: string, permissionId: string): Promise<void> {
+  const drive = getDriveClient();
+  if (!drive) return;
+  try {
+    await drive.permissions.delete({ fileId, permissionId });
+  } catch (err) {
+    console.error('Drive: unshareFile failed', err);
+  }
+}
+
+// Uploads a file into Forms/{title}/Attachments/ — the fallback for
+// anonymous/public respondents who have no personal Drive folder of their own.
+export async function uploadToFormAttachments(
+  formTitle: string,
+  formId: string,
+  filename: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<{ fileId: string; viewUrl: string } | null> {
+  if (!FORMS_FOLDER_ID) return null;
+  const drive = getDriveClient();
+  if (!drive) return null;
+  try {
+    const formFolderId = await getOrCreateFormFolder(formTitle, formId);
+    if (!formFolderId) return null;
+    const attachmentsId = await findOrCreateChildFolder(drive, formFolderId, 'Attachments');
+    const res = await drive.files.create({
+      requestBody: { name: filename, parents: [attachmentsId] },
+      media: { mimeType, body: Readable.from(buffer) },
+      fields: 'id,webViewLink',
+    });
+    return { fileId: res.data.id!, viewUrl: res.data.webViewLink! };
+  } catch (err) {
+    console.error('Drive: uploadToFormAttachments failed', err);
+    return null;
   }
 }

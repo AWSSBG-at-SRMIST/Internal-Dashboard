@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, description, deadline, assignmentType: scope, assignedToId, domain, subdomain, priority, submissionMode } = body;
+    const { title, description, descriptionFormat, deadline, assignmentType: scope, assignedToId, domain, subdomain, priority, submissionMode } = body;
 
     if (!title || !description || !deadline || !scope) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
       taskId,
       title,
       description,
+      descriptionFormat: descriptionFormat === 'MARKDOWN' ? 'MARKDOWN' : 'TEXT',
       deadline,
       priority: priority || 'MEDIUM',
       assignmentType: scope,

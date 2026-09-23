@@ -1,6 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { toProfileLink } from '@/lib/utils';
-import type { Member, Role } from '@/types';
+import { getDriveClient, getOrCreateFormFolder } from './drive';
+import type { Member, Role, FormDef, FormResponseAnswer } from '@/types';
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 
@@ -223,5 +224,123 @@ export async function deleteMemberRow(clubId: string): Promise<void> {
     }
   } catch (err) {
     console.error('Sheets delete failed', err);
+  }
+}
+
+// ─── Forms ──────────────────────────────────────────────────────────────────
+// Distinct from getClient() above, which gates on GOOGLE_SHEETS_SPREADSHEET_ID
+// (the fixed "Builders' Information" sheet) — forms create their own new
+// spreadsheets on the fly, one per form, so that env var is irrelevant here.
+
+function getSheetsClient(): sheets_v4.Sheets | null {
+  const email = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+  const key = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+  if (!email || !key) return null;
+  const auth = new google.auth.JWT({
+    email,
+    key: key.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  return google.sheets({ version: 'v4', auth });
+}
+
+// Creates a new Google Sheet for this form (header row = field labels +
+// "Submitted At" + "Respondent"), moves it into the form's Drive folder.
+// Best-effort — returns null (never throws) if Drive/Sheets isn't configured
+// or the call fails; DynamoDB is always the primary record either way.
+export async function createResponseSheet(form: Pick<FormDef, 'formId' | 'title' | 'fields'>): Promise<{ sheetId: string; folderId: string } | null> {
+  const sheets = getSheetsClient();
+  const drive = getDriveClient();
+  if (!sheets || !drive) return null;
+
+  try {
+    const folderId = await getOrCreateFormFolder(form.title, form.formId);
+    if (!folderId) return null;
+
+    const created = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: { title: `${form.title} — Responses` },
+        sheets: [{ properties: { title: 'Responses' } }],
+      },
+      fields: 'spreadsheetId',
+    });
+    const sheetId = created.data.spreadsheetId!;
+
+    // Move it from the service account's own Drive root into the shared folder.
+    const file = await drive.files.get({ fileId: sheetId, fields: 'parents' });
+    const prevParents = (file.data.parents || []).join(',');
+    await drive.files.update({
+      fileId: sheetId,
+      addParents: folderId,
+      removeParents: prevParents,
+      fields: 'id, parents',
+    });
+
+    const headers = [
+      'Submitted At', 'Club ID', 'Name', 'Position', 'Domain', 'Subdomain', 'Official Email',
+      ...form.fields.map(f => f.label),
+    ];
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: 'Responses!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers] },
+    });
+
+    return { sheetId, folderId };
+  } catch (err) {
+    console.error('Sheets: createResponseSheet failed', err);
+    return null;
+  }
+}
+
+export interface RespondentIdentity {
+  clubId: string;
+  name: string;
+  position: string;
+  domain: string;
+  subdomain: string;
+  officialEmail: string;
+}
+
+// Appends one response row. valueInputOption is deliberately RAW, never
+// USER_ENTERED — member-supplied text must never be evaluated as a formula.
+// `identity` is auto-filled from the logged-in respondent's member record
+// (never asked as a form question) — null for anonymous/public submissions.
+export async function appendResponseRow(
+  sheetId: string,
+  form: Pick<FormDef, 'fields'>,
+  answers: FormResponseAnswer[],
+  submittedAt: string,
+  identity: RespondentIdentity | null,
+): Promise<void> {
+  const sheets = getSheetsClient();
+  if (!sheets) return;
+  try {
+    const byField = new Map(answers.map(a => [a.fieldId, a]));
+    const row = [
+      submittedAt,
+      identity?.clubId || '',
+      identity?.name || 'Anonymous',
+      identity?.position || '',
+      identity?.domain || '',
+      identity?.subdomain || '',
+      identity?.officialEmail || '',
+      ...form.fields.map(f => {
+        const a = byField.get(f.fieldId);
+        if (!a) return '';
+        if (a.fileUrl) return a.fileUrl;
+        return Array.isArray(a.value) ? a.value.join(', ') : a.value;
+      }),
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: sheetId,
+      range: 'Responses!A1',
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [row] },
+    });
+  } catch (err) {
+    console.error('Sheets: appendResponseRow failed', err);
   }
 }

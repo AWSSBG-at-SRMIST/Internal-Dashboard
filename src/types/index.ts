@@ -80,6 +80,7 @@ export interface Task {
   taskId: string;
   title: string;
   description: string;
+  descriptionFormat?: 'TEXT' | 'MARKDOWN';
   deadline: string;
   priority: TaskPriority;
   assignmentType: TaskAssignmentScope;
@@ -254,4 +255,93 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   message?: string;
+}
+
+// ─── Forms ──────────────────────────────────────────────────────────────────
+
+export type FormFieldType =
+  | 'SHORT_TEXT'
+  | 'PARAGRAPH'
+  | 'MULTIPLE_CHOICE'
+  | 'CHECKBOXES'
+  | 'DROPDOWN'
+  | 'DATE'
+  | 'FILE_UPLOAD'
+  | 'SECTION_BREAK';
+
+export interface FormField {
+  fieldId: string;
+  type: FormFieldType;
+  label: string;
+  helpText?: string;
+  required: boolean;
+  options?: string[]; // MULTIPLE_CHOICE / CHECKBOXES / DROPDOWN only
+}
+
+export type FormAccessMode = 'PUBLIC' | 'MEMBERS_ONLY';
+
+// A single granted Drive "reader" permission, tracked so it can be revoked
+// later (when the grantee loses eligibility) without re-deriving anything.
+export interface DrivePermissionGrant {
+  memberId: string;
+  email: string;
+  permissionId: string;
+}
+
+export interface FormEditor {
+  memberId: string;
+  name: string;
+  email: string;
+}
+
+export interface FormDef {
+  formId: string;
+  slug: string;
+  title: string;
+  description: string;
+  fields: FormField[];
+  accessMode: FormAccessMode;
+  acceptingResponses: boolean;
+  closesAt: string | null;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  responseCount: number;
+  driveFolderId?: string | null;
+  driveSheetId?: string | null;
+  // Members explicitly granted edit + view access by the creator, on top of
+  // the creator/Presidium/hierarchy-above who always have it.
+  editors?: FormEditor[];
+  // Who currently holds a real Drive "reader" permission on driveSheetId —
+  // diffed against computeFormViewers() on every sync, never hand-edited.
+  sheetViewerPermissions?: DrivePermissionGrant[];
+}
+
+export interface FormResponseAnswer {
+  fieldId: string;
+  value: string | string[];
+  fileUrl?: string;
+  // The uploaded file's Drive file ID (distinct from fileUrl, which is just
+  // the view link) — needed because permission grants/revokes operate on
+  // the file ID, not the URL.
+  fileId?: string;
+  filePermissions?: DrivePermissionGrant[];
+}
+
+export interface FormResponseRecord {
+  formId: string;
+  responseId: string;
+  answers: FormResponseAnswer[];
+  submittedAt: string;
+  respondentMemberId?: string | null;
+  respondentName?: string | null;
+  respondentEmail?: string | null;
+  // Snapshot of the respondent's identity at submission time (not a live
+  // join) — Club ID/position/domain/subdomain can change or the member
+  // record can be removed later, but the response should still say who
+  // filled it in and from where, same as the auto-filled Sheet columns.
+  respondentClubId?: string | null;
+  respondentPosition?: string | null;
+  respondentDomain?: string | null;
+  respondentSubdomain?: string | null;
 }

@@ -69,7 +69,7 @@ export default function InstallPage() {
           </div>
           <div>
             <p className="font-bold text-[#f0f0f0] uppercase tracking-wide">AWSSBG Dashboard</p>
-            <p className="text-xs text-[#666] font-mono mt-0.5">internal-dashboard.awssbg-srmist.in</p>
+            <p className="text-xs text-[#666] font-mono mt-0.5">console.awssbg-srmist.in</p>
             <p className="text-xs text-[#555] font-mono mt-1">AWS Student Builder Group · SRMIST</p>
           </div>
         </CardContent>

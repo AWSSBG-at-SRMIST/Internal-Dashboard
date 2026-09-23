@@ -1,4 +1,4 @@
-import type { Domain, Subdomain, SessionUser, TaskAssignmentScope, Member, Role } from '@/types';
+import type { Domain, Subdomain, SessionUser, TaskAssignmentScope, Member, Role, FormDef, FormEditor } from '@/types';
 import { DOMAIN_SUBDOMAINS } from '@/types';
 
 export function isPresidium(actor: SessionUser): boolean {
@@ -337,4 +337,83 @@ export function canSubmitTask(
   task: { assignmentType: string; assignedToId?: string | null; domain?: Domain | null; subdomain?: Subdomain | null; createdBy: string },
 ): boolean {
   return getTaskRelationship(user, task) === 'CAN_SUBMIT';
+}
+
+// ─── Forms ──────────────────────────────────────────────────────────────────
+// Pure, client-safe logic only below — no Drive/DynamoDB imports. This file
+// is imported by client components (Sidebar.tsx), so pulling in server-only
+// code here (googleapis, aws-sdk) would leak those into the browser bundle.
+// Server-only Drive-permission syncing that BUILDS ON computeFormViewers
+// below lives in lib/permission-sync.ts instead, which imports from here,
+// never the other way around.
+
+// Explicit product decision: everyone except Builders can create a form —
+// same "core team only" rule this app uses for task creation (canCreateTask).
+export function canCreateForm(actor: SessionUser): boolean {
+  return actor.role !== 'BUILDER';
+}
+
+// Editing the form itself (fields/settings/editor list) and deleting it —
+// narrower than viewing: the hierarchy above the creator can see responses
+// (canViewFormResponses below) but can't edit someone else's form unless
+// they're Presidium or an explicitly-added editor.
+export function canManageForm(actor: SessionUser, form: { createdBy: string; editors?: FormEditor[] }): boolean {
+  return isPresidium(actor) || form.createdBy === actor.memberId || !!form.editors?.some(e => e.memberId === actor.memberId);
+}
+
+function isPresidiumRole(role: Member['role']): boolean {
+  return role === 'SBG_LEADER' || role === 'SECRETARY';
+}
+
+// Who should be able to see a given form's responses and attachments,
+// computed live off current sbg-members state every time — never cached,
+// since a role/domain/subdomain change or a member being deactivated must
+// immediately change who's entitled, and this is exactly what feeds the
+// Drive permission sync in permission-sync.ts.
+//
+// Rule: the creator, anyone on the form's `editors` list, the hierarchy
+// directly above the creator's role (Associate -> their Manager + their
+// Director; Manager -> their Director; Director -> nobody extra), and
+// Presidium always — restricted to isActive members only.
+export function computeFormViewers(
+  form: Pick<FormDef, 'createdBy' | 'editors'>,
+  allMembers: Member[],
+): Array<{ memberId: string; email: string; name: string }> {
+  const active = allMembers.filter(m => m.isActive);
+  const byId = new Map(active.map(m => [m.memberId, m]));
+  const creator = byId.get(form.createdBy);
+
+  const viewers = new Map<string, { memberId: string; email: string; name: string }>();
+  const add = (m?: Member) => {
+    if (m) viewers.set(m.memberId, { memberId: m.memberId, email: m.officialEmail, name: m.name });
+  };
+
+  add(creator);
+  for (const e of form.editors || []) add(byId.get(e.memberId));
+  for (const m of active) if (isPresidiumRole(m.role)) add(m);
+
+  if (creator && !isPresidiumRole(creator.role)) {
+    if (creator.role === 'ASSOCIATE') {
+      for (const m of active) {
+        if (m.role === 'MANAGER' && m.domain === creator.domain && m.subdomain === creator.subdomain) add(m);
+        if (m.role === 'DIRECTOR' && m.domain === creator.domain) add(m);
+      }
+    } else if (creator.role === 'MANAGER') {
+      for (const m of active) if (m.role === 'DIRECTOR' && m.domain === creator.domain) add(m);
+    }
+    // DIRECTOR: only Presidium sits above, already added above.
+  }
+
+  return [...viewers.values()];
+}
+
+// Viewing a form's responses/attachments — creator, editors, the hierarchy
+// above the creator, and Presidium. This is the same set that actually
+// holds real Drive "reader" access, kept in lockstep by permission-sync.ts.
+export function canViewFormResponses(
+  actor: SessionUser,
+  form: { createdBy: string; editors?: FormEditor[] },
+  allMembers: Member[],
+): boolean {
+  return computeFormViewers(form, allMembers).some(v => v.memberId === actor.memberId);
 }

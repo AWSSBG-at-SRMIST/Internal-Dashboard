@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, Info, CalendarClock, Users, User } from 'lucide-react';
+import { ArrowLeft, Loader2, Info, CalendarClock, Users, User, Eye, Pencil } from 'lucide-react';
+import { Markdown } from '@/components/ui/markdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,7 +35,6 @@ function getAvailableScopes(me: SessionUser): { value: TaskAssignmentScope; labe
     ...(me.subdomain === 'HR & Admin' ? [
       { value: 'ORG_WIDE' as const, label: 'Org-wide', description: 'Assign to every member of the club' },
     ] : []),
-    { value: 'SUBDOMAIN_WIDE', label: 'Subdomain-wide', description: `Assign to everyone in ${me.subdomain}` },
     { value: 'BUILDERS_ONLY',  label: 'Builders Only',  description: `Assign to all Builders in ${me.subdomain}` },
     { value: 'INDIVIDUAL',     label: 'Individual',     description: 'Assign to one specific member in your subdomain' },
   ];
@@ -48,7 +48,7 @@ function getAvailableScopes(me: SessionUser): { value: TaskAssignmentScope; labe
 }
 
 const COLLECTIVE_ELIGIBLE: TaskAssignmentScope[] = [
-  'ORG_WIDE', 'ALL_DIRECTORS', 'DOMAIN_WIDE', 'SUBDOMAIN_LEADERSHIP', 'SUBDOMAIN_WIDE', 'BUILDERS_ONLY',
+  'ORG_WIDE', 'ALL_DIRECTORS', 'DOMAIN_WIDE', 'SUBDOMAIN_LEADERSHIP', 'BUILDERS_ONLY',
 ];
 
 export default function NewTaskPage() {
@@ -62,6 +62,8 @@ export default function NewTaskPage() {
   const [assignedToId, setAssignedToId] = useState('');
   const [leadershipSubdomain, setLeadershipSubdomain] = useState<Subdomain | ''>('');
   const [form, setForm] = useState({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
+  const [descFormat, setDescFormat] = useState<'TEXT' | 'MARKDOWN'>('TEXT');
+  const [descPreview, setDescPreview] = useState(false);
 
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineHour, setDeadlineHour] = useState('12');
@@ -151,6 +153,7 @@ export default function NewTaskPage() {
     try {
       const payload: Record<string, any> = {
         ...form,
+        descriptionFormat: descFormat,
         assignmentType: scope,
         submissionMode,
         assignedToId: assignedToId || null,
@@ -216,10 +219,39 @@ export default function NewTaskPage() {
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="desc">Description *</Label>
-              <Textarea id="desc" placeholder="Requirements, deliverables, context..."
-                value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="min-h-[120px]" required />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="desc">Description *</Label>
+                <div className="flex items-center gap-1">
+                  {(['TEXT', 'MARKDOWN'] as const).map(fmt => (
+                    <button key={fmt} type="button" onClick={() => { setDescFormat(fmt); setDescPreview(false); }}
+                      className={`px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider border transition-colors ${
+                        descFormat === fmt
+                          ? 'border-[#FF9900] text-[#FF9900] bg-[#FF9900]/10'
+                          : 'border-[#2d2d2d] text-[#555] hover:border-[#444] hover:text-[#aaa]'
+                      }`}
+                    >{fmt}</button>
+                  ))}
+                  {descFormat === 'MARKDOWN' && (
+                    <button type="button" onClick={() => setDescPreview(p => !p)}
+                      className="ml-1 flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider border border-[#2d2d2d] text-[#555] hover:border-[#444] hover:text-[#aaa] transition-colors"
+                    >
+                      {descPreview ? <><Pencil size={9} />Edit</> : <><Eye size={9} />Preview</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {descFormat === 'MARKDOWN' && descPreview ? (
+                <div className="min-h-[120px] p-3 border-2 border-[#2d2d2d] bg-[#0a0a0a]">
+                  {form.description.trim()
+                    ? <Markdown>{form.description}</Markdown>
+                    : <p className="text-[#444] text-xs font-mono italic">Nothing to preview yet...</p>
+                  }
+                </div>
+              ) : (
+                <Textarea id="desc" placeholder={descFormat === 'MARKDOWN' ? 'Supports **bold**, *italic*, `code`, lists, tables...' : 'Requirements, deliverables, context...'}
+                  value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  className="min-h-[120px]" required />
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="deadline-date">Deadline *</Label>

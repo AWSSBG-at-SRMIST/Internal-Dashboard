@@ -231,3 +231,12 @@ export function toMeetupLink(value?: string | null): string | null {
   const trimmed = value.trim();
   return /^https?:\/\//i.test(trimmed) ? trimmed : null;
 }
+
+export function slugify(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'form';
+}

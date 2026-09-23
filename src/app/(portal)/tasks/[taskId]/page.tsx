@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Clock, Link2, Plus, X, Loader2,
-  Check, XCircle, Star, ExternalLink, Calendar, User, Trash2, Lock, Users, Pencil, UserPlus, Search
+  Check, XCircle, Star, ExternalLink, Calendar, User, Trash2, Lock, Users, Pencil, UserPlus, Search, Eye
 } from 'lucide-react';
+import { Markdown } from '@/components/ui/markdown';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -53,6 +54,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
+  const [editDescFormat, setEditDescFormat] = useState<'TEXT' | 'MARKDOWN'>('TEXT');
+  const [editDescPreview, setEditDescPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [subFilter, setSubFilter] = useState('ALL');
   const [showDelegateModal, setShowDelegateModal] = useState(false);
@@ -149,6 +152,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       deadline: data.task.deadline ? data.task.deadline.slice(0, 16) : '',
       priority: data.task.priority || 'MEDIUM',
     });
+    setEditDescFormat((data.task.descriptionFormat as 'TEXT' | 'MARKDOWN') || 'TEXT');
+    setEditDescPreview(false);
     setShowEdit(true);
   }
 
@@ -163,7 +168,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({ ...editForm, descriptionFormat: editDescFormat }),
       });
       const d = await res.json();
       if (!res.ok) { toast.error(d.error || 'Failed to update task'); return; }
@@ -314,7 +319,10 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
       <Card>
         <CardHeader><CardTitle className="text-base">Description</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-[#d0d0d0] whitespace-pre-wrap font-mono text-sm leading-relaxed">{task.description}</p>
+          {task.descriptionFormat === 'MARKDOWN'
+            ? <Markdown>{task.description}</Markdown>
+            : <p className="text-[#d0d0d0] whitespace-pre-wrap font-mono text-sm leading-relaxed">{task.description}</p>
+          }
         </CardContent>
       </Card>
 
@@ -742,13 +750,43 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Description *</Label>
-              <Textarea
-                value={editForm.description}
-                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                className="min-h-[120px]"
-                required
-              />
+              <div className="flex items-center justify-between">
+                <Label>Description *</Label>
+                <div className="flex items-center gap-1">
+                  {(['TEXT', 'MARKDOWN'] as const).map(fmt => (
+                    <button key={fmt} type="button" onClick={() => { setEditDescFormat(fmt); setEditDescPreview(false); }}
+                      className={`px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider border transition-colors ${
+                        editDescFormat === fmt
+                          ? 'border-[#FF9900] text-[#FF9900] bg-[#FF9900]/10'
+                          : 'border-[#2d2d2d] text-[#555] hover:border-[#444] hover:text-[#aaa]'
+                      }`}
+                    >{fmt}</button>
+                  ))}
+                  {editDescFormat === 'MARKDOWN' && (
+                    <button type="button" onClick={() => setEditDescPreview(p => !p)}
+                      className="ml-1 flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider border border-[#2d2d2d] text-[#555] hover:border-[#444] hover:text-[#aaa] transition-colors"
+                    >
+                      {editDescPreview ? <><Pencil size={9} />Edit</> : <><Eye size={9} />Preview</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {editDescFormat === 'MARKDOWN' && editDescPreview ? (
+                <div className="min-h-[120px] p-3 border-2 border-[#2d2d2d] bg-[#0a0a0a]">
+                  {editForm.description.trim()
+                    ? <Markdown>{editForm.description}</Markdown>
+                    : <p className="text-[#444] text-xs font-mono italic">Nothing to preview yet...</p>
+                  }
+                </div>
+              ) : (
+                <Textarea
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="min-h-[120px]"
+                  placeholder={editDescFormat === 'MARKDOWN' ? 'Supports **bold**, *italic*, `code`, lists, tables...' : ''}
+                  required
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Deadline *</Label>

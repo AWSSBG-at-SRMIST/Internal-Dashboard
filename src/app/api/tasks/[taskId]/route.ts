@@ -125,7 +125,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
 
   try {
     const body = await req.json();
-    const { title, description, deadline, priority, delegatedReviewers } = body;
+    const { title, description, descriptionFormat, deadline, priority, delegatedReviewers } = body;
 
     if (priority !== undefined && !['LOW', 'MEDIUM', 'HIGH'].includes(priority)) {
       return NextResponse.json({ error: 'Invalid priority value' }, { status: 400 });
@@ -221,6 +221,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ task
 
     if (title !== undefined)             { setParts.push('title = :t');                exprValues[':t']  = title; }
     if (description !== undefined)       { setParts.push('description = :d');          exprValues[':d']  = description; }
+    if (descriptionFormat !== undefined && ['TEXT', 'MARKDOWN'].includes(descriptionFormat)) {
+      setParts.push('descriptionFormat = :df'); exprValues[':df'] = descriptionFormat;
+    }
     if (priority !== undefined)          { setParts.push('priority = :p');             exprValues[':p']  = priority; }
     if (deadline !== undefined) {
       setParts.push('deadline = :dl', 'reminderSentAt = :null');

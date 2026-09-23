@@ -10,7 +10,7 @@ const FROM_ADDRESS = 'AWSSBG Internal Dashboard <internal-dashboard@awssbg-srmis
 // A small, pre-compressed copy — the source logo.png is 2.6MB (6250x6250),
 // far too large to embed at 36x36 in an email without slow/broken loading
 // in some clients.
-const LOGO_URL = 'https://internal-dashboard.awssbg-srmist.in/logo-email.png';
+const LOGO_URL = 'https://console.awssbg-srmist.in/logo-email.png';
 
 // ─── Shared layout helpers ────────────────────────────────────────────────────
 
