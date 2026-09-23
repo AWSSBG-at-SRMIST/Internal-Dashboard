@@ -66,7 +66,7 @@ export default function PublicFormClient({ form, signedInAs }: { form: FormDef; 
           <div className="w-9 h-9 overflow-hidden flex-shrink-0 bg-[#1a1a1a] border-2 border-[#2d2d2d]">
             <Image src="/logo.png" alt="AWSSBG" width={36} height={36} className="object-contain" />
           </div>
-          <p className="text-[#FF9900] text-xs font-mono uppercase tracking-widest">AWS Student Builder Group · SRMIST</p>
+          <p className="text-[#FF9900] text-xs font-mono uppercase tracking-widest">AWS Student Builder Group at SRMIST</p>
         </div>
 
         <Card style={{ borderTopColor: '#FF9900', borderTopWidth: 4 }}>

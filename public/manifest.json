@@ -1,6 +1,6 @@
 {
-  "name": "AWSSBG Internal Dashboard",
-  "short_name": "AWSSBG",
+  "name": "AWS SBG Console",
+  "short_name": "AWS SBG",
   "description": "Internal dashboard for AWS Student Builder Group at SRMIST",
   "start_url": "/dashboard",
   "display": "standalone",

@@ -113,10 +113,10 @@ export default function LoginPage() {
               <Image src="/logo.png" alt="AWSSBG" width={44} height={44} className="object-contain" />
             </div>
             <h1 className="text-xl font-bold text-[#f0f0f0] uppercase tracking-widest animate-glitch">
-              Internal Dashboard
+              Console
             </h1>
             <p className="text-[#FF9900] text-xs font-mono uppercase tracking-widest mt-1">
-              AWS Student Builder Group · SRMIST
+              AWS Student Builder Group at SRMIST
             </p>
           </div>
 
@@ -216,7 +216,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-[#444] text-xs mt-4 font-mono uppercase tracking-widest">
-          Internal use only · AWS Student Builder Group · SRMIST
+          Internal use only · AWS Student Builder Group at SRMIST
         </p>
       </div>
     </div>

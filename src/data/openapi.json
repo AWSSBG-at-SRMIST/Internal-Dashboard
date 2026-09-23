@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "AWSSBG Internal Dashboard API",
-    "description": "REST API for the AWS Student Builder Group Internal Dashboard — members, tasks, submissions, link shortener, audit logs, and analytics. All endpoints (except auth) require a valid `sbg_session` HttpOnly cookie obtained via the OTP login flow.",
+    "title": "AWS SBG Console API",
+    "description": "REST API for the AWS Student Builder Group Console — members, tasks, submissions, link shortener, audit logs, and analytics. All endpoints (except auth) require a valid `sbg_session` HttpOnly cookie obtained via the OTP login flow.",
     "version": "1.0.0"
   },
   "servers": [

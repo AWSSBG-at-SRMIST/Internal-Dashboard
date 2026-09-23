@@ -112,7 +112,7 @@ export default async function DashboardPage() {
           {getGreeting()}, {firstName}<span className="animate-blink text-[#FF9900]">_</span>
         </h1>
         <p className="text-[#666] text-sm mt-1">
-          AWSSBG Internal Dashboard
+          AWS SBG Console
         </p>
       </div>
 

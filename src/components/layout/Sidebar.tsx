@@ -52,8 +52,8 @@ function NavPanel({ user, visibleItems, pathname, profileMissingCount, onNavigat
             <Image src="/logo.png" alt="AWSSBG Logo" width={36} height={36} className="object-contain" />
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-tight tracking-wide uppercase">Internal Dashboard</p>
-            <p className="text-[#f0f0f0] text-xs font-mono">@AWSSBG · SRMIST</p>
+            <p className="text-white font-bold text-sm leading-tight tracking-wide uppercase">Console</p>
+            <p className="text-[#f0f0f0] text-xs font-mono">AWS SBG at SRMIST</p>
           </div>
         </div>
       </div>
@@ -180,7 +180,7 @@ export function Sidebar({ user, showVault, profileMissingCount, children }: Side
           <div className="w-7 h-7 overflow-hidden flex-shrink-0 bg-[#1a1a1a] border border-[#333]">
             <Image src="/logo.png" alt="AWSSBG Logo" width={28} height={28} className="object-contain" />
           </div>
-          <p className="text-white font-bold text-sm truncate uppercase tracking-wide">Internal Dashboard</p>
+          <p className="text-white font-bold text-sm truncate uppercase tracking-wide">Console</p>
         </header>
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 overscroll-contain flex flex-col">

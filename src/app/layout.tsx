@@ -6,8 +6,8 @@ import { Analytics } from '@vercel/analytics/next';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 
 export const metadata: Metadata = {
-  title: 'Internal Dashboard | @AWSSBG-at-SRMIST',
-  description: 'Internal operations dashboard for AWS Student Builder Group at SRMIST',
+  title: 'Console | AWS SBG at SRMIST',
+  description: 'Internal operations console for AWS Student Builder Group at SRMIST',
   manifest: '/manifest.json',
   icons: {
     icon: '/logo.png',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'AWSSBG',
+    title: 'AWS SBG Console',
   },
 };
 

@@ -68,9 +68,9 @@ export default function InstallPage() {
             <Image src="/icons/icon-192x192.png" alt="App icon" width={56} height={56} className="object-contain" />
           </div>
           <div>
-            <p className="font-bold text-[#f0f0f0] uppercase tracking-wide">AWSSBG Dashboard</p>
+            <p className="font-bold text-[#f0f0f0] uppercase tracking-wide">AWS SBG Console</p>
             <p className="text-xs text-[#666] font-mono mt-0.5">console.awssbg-srmist.in</p>
-            <p className="text-xs text-[#555] font-mono mt-1">AWS Student Builder Group · SRMIST</p>
+            <p className="text-xs text-[#555] font-mono mt-1">AWS Student Builder Group at SRMIST</p>
           </div>
         </CardContent>
       </Card>

@@ -6,7 +6,7 @@ import { Resend } from 'resend';
 // blocked logins entirely. Resend has no such shared per-account cap.
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM_ADDRESS = 'AWSSBG Internal Dashboard <internal-dashboard@awssbg-srmist.in>';
+const FROM_ADDRESS = 'AWS SBG Console <internal-dashboard@awssbg-srmist.in>';
 // A small, pre-compressed copy — the source logo.png is 2.6MB (6250x6250),
 // far too large to embed at 36x36 in an email without slow/broken loading
 // in some clients.
@@ -62,10 +62,10 @@ function shell(title: string, body: string) {
           </td>
           <td style="vertical-align:middle;">
             <span style="color:#FF9900;font-size:13px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">
-              AWSSBG Internal Dashboard
+              AWS SBG Console
             </span><br>
             <span style="color:#aaa;font-size:11px;letter-spacing:1px;">
-              @AWSSBG &middot; SRM Institute of Science and Technology
+              AWS Student Builder Group at SRMIST
             </span>
           </td>
         </tr>
@@ -127,7 +127,7 @@ export async function sendOTPEmail(email: string, otp: string, name = 'Member') 
       Hello, ${escHtml(name)}.
     </p>
     <p style="color:#f0f0f0;font-size:13px;margin:0 0 28px;">
-      Your one-time sign-in code for the AWSSBG Internal Dashboard:
+      Your one-time sign-in code for the AWS SBG Console:
     </p>
 
     <div style="background:#050505;border:2px solid #FF9900;padding:28px;text-align:center;margin-bottom:24px;">
@@ -144,7 +144,7 @@ export async function sendOTPEmail(email: string, otp: string, name = 'Member') 
       Do not share this OTP with anyone.
     </p>`;
 
-  await send(email, `[${otp}] Your sign-in OTP — AWSSBG Dashboard`, shell('Sign-In OTP', body));
+  await send(email, `[${otp}] Your sign-in OTP — AWS SBG Console`, shell('Sign-In OTP', body));
 }
 
 // ─── Task Assignment Email ────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ export async function sendTaskAssignmentEmail(
       Hello, ${escHtml(name)}.
     </p>
     <p style="color:#f0f0f0;font-size:13px;margin:0 0 24px;">
-      A new task has been assigned to you on the AWSSBG Internal Dashboard.
+      A new task has been assigned to you on the AWS SBG Console.
     </p>
 
     <div style="background:#050505;border:2px solid #2d2d2d;border-left:4px solid #FF9900;padding:20px 20px 18px;margin-bottom:24px;">
@@ -204,7 +204,7 @@ export async function sendTaskAssignmentEmail(
 
     ${ctaButton(taskUrl, 'View Task')}`;
 
-  await send(email, `[NEW TASK] ${taskTitle} — AWSSBG Dashboard`, shell('New Task Assigned', body));
+  await send(email, `[NEW TASK] ${taskTitle} — AWS SBG Console`, shell('New Task Assigned', body));
 }
 
 // ─── Delegate Review Email ────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ export async function sendDelegateReviewEmail(
       Hello, ${escHtml(name)}.
     </p>
     <p style="color:#f0f0f0;font-size:13px;margin:0 0 24px;">
-      You have been assigned as a delegated reviewer for the following task on the AWSSBG Internal Dashboard.
+      You have been assigned as a delegated reviewer for the following task on the AWS SBG Console.
     </p>
 
     <div style="background:#050505;border:2px solid #2d2d2d;border-left:4px solid #FF9900;padding:20px 20px 18px;margin-bottom:24px;">
@@ -249,7 +249,7 @@ export async function sendDelegateReviewEmail(
 
     ${ctaButton(taskUrl, 'Open Task')}`;
 
-  await send(email, `[REVIEW DELEGATED] ${taskTitle} — AWSSBG Dashboard`, shell('Review Delegation', body));
+  await send(email, `[REVIEW DELEGATED] ${taskTitle} — AWS SBG Console`, shell('Review Delegation', body));
 }
 
 // ─── Task Reminder Email ──────────────────────────────────────────────────────
@@ -288,5 +288,5 @@ export async function sendTaskReminderEmail(
 
     ${ctaButton(taskUrl, 'Submit Now')}`;
 
-  await send(email, `[REMINDER] "${taskTitle}" is due soon — AWSSBG Dashboard`, shell('Task Deadline Reminder', body));
+  await send(email, `[REMINDER] "${taskTitle}" is due soon — AWS SBG Console`, shell('Task Deadline Reminder', body));
 }
